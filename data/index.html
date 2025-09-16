@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Applausometer</title>
+  <style>
+    :root {
+      --bg: #0f1216;
+      --panel: #161b22;
+      --ink: #e6edf3;
+      --sub: #9da7b3;
+      --brand: #00c2ff;
+      --accent: #8a5cf6;
+      --ok: #16c784;
+      --warn: #ffb020;
+      --danger: #ff5a5f;
+      --muted: #253042;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--ink); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 14px; }
+    header h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: 0.2px; }
+    header .status { font-size: 12px; color: var(--sub); display: flex; gap: 10px; align-items: center; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: var(--panel); color: var(--sub); border: 1px solid var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 0 rgba(255, 176, 32, 0.5); }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 0 rgba(22, 199, 132, 0.5); }
+    .dot.err { background: var(--danger); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 6px; background: var(--panel); border: 1px solid var(--muted); border-radius: 10px; padding: 6px; }
+    .tab { padding: 10px 14px; border-radius: 8px; color: var(--sub); cursor: pointer; user-select: none; }
+    .tab.active { background: #1e2633; color: var(--ink); border: 1px solid var(--muted); }
+    .panes { margin-top: 14px; }
+    .pane { display: none; }
+    .pane.active { display: block; }
+
+    /* Cards */
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--muted); border-radius: 12px; padding: 14px; }
+    .card h3 { margin: 0 0 10px; font-size: 14px; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    /* Mixer style meters */
+    .mixer { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 16px; }
+    .strip { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .meter-box { position: relative; height: 260px; width: 48px; border-radius: 10px; background: linear-gradient(180deg, #0f141d 0%, #0e1420 100%); border: 1px solid var(--muted); overflow: hidden; }
+    .meter-fill { position: absolute; bottom: 0; left: 0; right: 0; height: 0%; background: linear-gradient(180deg, #22e0a1 0%, #00c2ff 60%, #8a5cf6 100%); transition: height 90ms linear; box-shadow: inset 0 0 12px rgba(0,0,0,0.35); }
+    .meter-peak { position: absolute; left: 0; right: 0; height: 3px; background: var(--warn); box-shadow: 0 0 6px rgba(255, 176, 32, 0.9); }
+    .strip label { font-size: 12px; color: var(--sub); }
+    .strip .value { font-size: 18px; font-weight: 700; }
+
+    /* Forms */
+    .row { display: grid; grid-template-columns: 180px 1fr auto; gap: 10px; align-items: center; margin: 8px 0; }
+    .row label { color: var(--sub); font-size: 13px; }
+    input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px 12px; background: #0f141d; color: var(--ink); border: 1px solid var(--muted); border-radius: 8px; }
+    textarea { min-height: 100px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+    .btn { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--muted); background: #1e2633; color: var(--ink); cursor: pointer; }
+    .btn.primary { background: linear-gradient(90deg, var(--brand), var(--accent)); border: none; }
+    .btn.danger { background: #2a1314; border: 1px solid #4a1c1e; color: #ff9ea3; }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--muted); font-size: 13px; }
+    th { color: var(--sub); text-align: left; font-weight: 600; }
+    tbody tr:hover { background: #1a2230; }
+
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+  <link rel="icon" href="/favicon.ico" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0f1216" />
+  <meta name="description" content="Applausometer Monitoring und Konfiguration" />
+  <meta name="robots" content="noindex, nofollow" />
+  <script>
+    // --- State ---
+    const WS_URL = `ws://${location.hostname}:81`;
+    let ws;
+    let lastMessage = {};
+    let connected = false;
+    let meterDefs = [ { id: 'm0', label: 'Lautstärke', peak: 0, value: 0 } ];
+
+    const CONFIG_KEY = 'applausometer_config_v1';
+    const LIST_KEY = 'applausometer_records_v1';
+
+    const defaultConfig = { f1: 1000, f2: 2000, gain: '40', durationMs: 5000 };
+
+    function loadConfig() {
+      try { return { ...defaultConfig, ...(JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}) }; }
+      catch { return { ...defaultConfig }; }
+    }
+    function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
+    function loadList() { try { return JSON.parse(localStorage.getItem(LIST_KEY)) || []; } catch { return []; } }
+    function saveList(list) { localStorage.setItem(LIST_KEY, JSON.stringify(list)); }
+
+    // --- WebSocket ---
+    function connectWS() {
+      try { ws?.close(); } catch {}
+      ws = new WebSocket(WS_URL);
+      ws.onopen = () => { connected = true; updateConnUI(); };
+      ws.onclose = () => { connected = false; updateConnUI(); setTimeout(connectWS, 1500); };
+      ws.onerror = () => { connected = false; updateConnUI(); };
+      ws.onmessage = (ev) => {
+        try { lastMessage = JSON.parse(ev.data); } catch { lastMessage = { raw: String(ev.data).slice(0, 400) }; }
+        document.getElementById('debug').value = JSON.stringify(lastMessage, null, 2);
+        // Map incoming fields to our meter(s)
+        // Expected optional fields: level (0..100), peak (0..100)
+        const level = clamp( resolveNumber(lastMessage.level, lastMessage.number, Math.round(Math.random()*100)), 0, 100 );
+        const peak = clamp( resolveNumber(lastMessage.peak, null, null), 0, 100 );
+        setMeter(0, level, peak);
+        // Update uptime if provided
+        if (lastMessage.uptime) document.getElementById('uptime').textContent = lastMessage.uptime;
+      };
+    }
+
+    function resolveNumber(...candidates) {
+      for (const v of candidates) { const n = Number(v); if (!isNaN(n) && isFinite(n)) return n; }
+      return 0;
+    }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function updateConnUI() {
+      const dot = document.getElementById('wsdot');
+      const text = document.getElementById('wslabel');
+      dot.className = 'dot' + (connected ? ' ok' : '');
+      text.textContent = connected ? 'WebSocket verbunden' : 'WebSocket getrennt';
+      document.getElementById('resetPeaks').disabled = !connected;
+    }
+
+    // --- Mixer meter logic ---
+    function setMeter(index, value, peakFromServer) {
+      const m = meterDefs[index];
+      if (!m) return;
+      m.value = clamp(value, 0, 100);
+      if (peakFromServer != null && !Number.isNaN(Number(peakFromServer))) {
+        m.peak = Math.max(m.peak, clamp(Number(peakFromServer), 0, 100));
+      } else {
+        m.peak = Math.max(m.peak, m.value);
+      }
+      renderMeters();
+    }
+    function resetPeaks(localOnly=false) {
+      meterDefs.forEach(m => m.peak = 0);
+      renderMeters();
+      if (!localOnly && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: 'reset_peaks' }));
+      }
+    }
+    function renderMeters() {
+      meterDefs.forEach((m, i) => {
+        const fill = document.querySelector(`[data-meter="${i}"] .meter-fill`);
+        const peak = document.querySelector(`[data-meter="${i}"] .meter-peak`);
+        const val = document.querySelector(`[data-meter="${i}"] .value`);
+        if (fill) fill.style.height = `${m.value}%`;
+        if (peak) peak.style.bottom = `${m.peak}%`;
+        if (val) val.textContent = `${m.value.toFixed(0)}%`;
+      });
+    }
+
+    // --- Records ---
+    function addRecord() {
+      const id = document.getElementById('recId').value.trim();
+      const name = document.getElementById('recName').value.trim();
+      const value = meterDefs[0]?.value ?? 0;
+      if (!id || !name) { alert('Bitte ID und Name angeben.'); return; }
+      const list = loadList();
+      list.push({ id, name, value: Math.round(value), ts: Date.now() });
+      saveList(list);
+      renderList();
+      document.getElementById('recName').value = '';
+    }
+    function clearList() { if (!confirm('Gespeicherte Liste wirklich löschen?')) return; saveList([]); renderList(); }
+    function renderList() {
+      const tbody = document.getElementById('listBody');
+      const list = loadList();
+      tbody.innerHTML = list.map((r, idx) => `
+        <tr>
+          <td>${idx+1}</td>
+          <td>${escapeHtml(r.id)}</td>
+          <td>${escapeHtml(r.name)}</td>
+          <td style="text-align:right">${r.value}</td>
+        </tr>
+      `).join('');
+      document.getElementById('listEmpty').style.display = list.length ? 'none' : 'block';
+    }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
+
+    // --- Config ---
+    function loadConfigToForm() {
+      const cfg = loadConfig();
+      document.getElementById('f1').value = cfg.f1;
+      document.getElementById('f2').value = cfg.f2;
+      document.getElementById('duration').value = Math.round(cfg.durationMs/1000);
+      document.querySelectorAll('input[name="gain"]').forEach(r => r.checked = r.value === String(cfg.gain));
+    }
+    function saveConfigFromForm() {
+      const cfg = {
+        f1: Number(document.getElementById('f1').value) || defaultConfig.f1,
+        f2: Number(document.getElementById('f2').value) || defaultConfig.f2,
+        gain: String(document.querySelector('input[name="gain"]:checked')?.value || defaultConfig.gain),
+        durationMs: (Number(document.getElementById('duration').value) || 5) * 1000,
+      };
+      saveConfig(cfg);
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ command: 'set_config', config: cfg }));
+      alert('Konfiguration gespeichert');
+    }
+
+    // --- Tabs ---
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+      document.getElementById(`pane-${tab}`).classList.add('active');
+    }
+
+    // --- Init ---
+    window.addEventListener('load', () => {
+      connectWS();
+      loadConfigToForm();
+      renderList();
+      renderMeters();
+    });
+
+    // --- Utilities ---
+    // no other commands needed in demo
+  </script>
+  <noscript>Diese Anwendung benötigt JavaScript.</noscript>
+  <style id="keyframes">
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(22,199,132,0.5); } 70% { box-shadow: 0 0 0 8px rgba(22,199,132,0); } 100% { box-shadow: 0 0 0 0 rgba(22,199,132,0); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Applausometer</h1>
+      <div class="status">
+        <span class="badge"><span id="wsdot" class="dot"></span><span id="wslabel">WebSocket getrennt</span></span>
+        <span class="badge">Uptime: <span id="uptime" style="margin-left:6px; color: var(--ink)">–</span></span>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="monitoring" onclick="switchTab('monitoring')">Monitoring</div>
+      <div class="tab" data-tab="config" onclick="switchTab('config')">Config</div>
+    </div>
+
+    <div class="panes">
+      <!-- Monitoring -->
+      <section class="pane active" id="pane-monitoring">
+        <div class="grid" style="grid-template-columns: repeat(12, 1fr);">
+          <div class="card" style="grid-column: span 5;">
+            <h3>Aktuelle Messwerte</h3>
+            <div class="mixer">
+              <div class="strip">
+                <div class="meter-box" data-meter="0">
+                  <div class="meter-fill"></div>
+                  <div class="meter-peak" style="bottom:0"></div>
+                </div>
+                <label>Lautstärke</label>
+                <div class="value">0%</div>
+              </div>
+            </div>
+            <div style="margin-top:12px; display:flex; gap:8px;">
+              <button class="btn" id="resetPeaks" onclick="resetPeaks(false)">Peaks zurücksetzen</button>
+            </div>
+          </div>
+
+          <div class="card" style="grid-column: span 7;">
+            <h3>Teilnehmer speichern</h3>
+            <div class="row">
+              <label for="recId">ID</label>
+              <input id="recId" type="text" placeholder="z.B. 42" />
+              <div></div>
+            </div>
+            <div class="row">
+              <label for="recName">Name</label>
+              <input id="recName" type="text" placeholder="z.B. Team Alpha" />
+              <button class="btn primary" onclick="addRecord()">Speichern</button>
+            </div>
+
+            <div style="margin-top:14px;">
+              <h3>Gespeicherte Liste</h3>
+              <div id="listEmpty" style="color: var(--sub); font-size: 13px; padding: 8px 0;">Keine Einträge vorhanden.</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th style="text-align:right">Messwert</th>
+                  </tr>
+                </thead>
+                <tbody id="listBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Config -->
+      <section class="pane" id="pane-config">
+        <div class="grid">
+          <div class="card" style="grid-column: span 6;">
+            <h3>Filter & Messung</h3>
+            <div class="row">
+              <label for="f1">Bandpass Ziel F1 (Hz)</label>
+              <input id="f1" type="number" min="10" max="20000" step="1" />
+              <div></div>
+            </div>
+            <div class="row">
+              <label for="f2">Bandpass Ziel F2 (Hz)</label>
+              <input id="f2" type="number" min="10" max="20000" step="1" />
+              <div></div>
+            </div>
+            <div class="row">
+              <label>Verstärkung</label>
+              <div>
+                <label style="margin-right:14px"><input type="radio" name="gain" value="40" /> 40 dB</label>
+                <label><input type="radio" name="gain" value="60" /> 60 dB</label>
+              </div>
+              <div></div>
+            </div>
+            <div class="row">
+              <label for="duration">Dauer der Messung (s)</label>
+              <input id="duration" type="number" min="1" max="600" step="1" />
+              <button class="btn primary" onclick="saveConfigFromForm()">Konfiguration speichern</button>
+            </div>
+          </div>
+
+          <div class="card" style="grid-column: span 6;">
+            <h3>Gespeicherte Liste</h3>
+            <div style="display:flex; gap:8px;">
+              <button class="btn danger" onclick="clearList()">Liste löschen</button>
+              <button class="btn" onclick="resetPeaks(true)">Peaks lokal löschen</button>
+            </div>
+            <div style="margin-top:14px;">
+              <h3>Debug Info</h3>
+              <textarea id="debug" readonly placeholder="Letzte Meldung..."></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
