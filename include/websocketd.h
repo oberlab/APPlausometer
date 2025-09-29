@@ -1,5 +1,6 @@
 #pragma once
 
+
 // websocket broadcast interval (ms) for smooth meter updates
 const unsigned long websocket_update_interval = 100;
 

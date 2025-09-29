@@ -1,6 +1,6 @@
 #include <WebServer.h>
 #include <Arduino.h>
-#include "fs_compat.h"
+#include "filesystem.h"
 #include "httpd.h"
 
 WebServer httpd(80);
@@ -93,21 +93,45 @@ bool handleFileRead(String path)
   return false;
 }
 
+
 void setup_httpd()
 {
-  // Start the web server
+  // Route for dedicated download
+  httpd.on("/download", HTTP_GET, []() {
+    if (!httpd.hasArg("file")) {
+      httpd.send(400, "text/plain", "Missing 'file' parameter");
+      return;
+    }
 
-  // wenn kein handle für die URL vergeben wurde, überprüfe ob eine entsprechende
-  // Datei im Dateisystem liegt und sende dann die. Wenn sie fehlt -> Fehlermeldung
-  httpd.onNotFound([]()
-                   {
+    String path = "/" + httpd.arg("file");  // z.B. ?file=config.json
+    if (!exists(path)) {
+      httpd.send(404, "text/plain", "File not found");
+      return;
+    }
+
+    File file = FILESYSTEM.open(path, "r");
+    if (!file) {
+      httpd.send(500, "text/plain", "Failed to open file");
+      return;
+    }
+
+    String contentType = "application/octet-stream";
+    httpd.streamFile(file, contentType);
+    file.close();
+  });
+
+  // Fallback: static files from SPIFFS via e.g. http://ip/config.json
+  httpd.onNotFound([]() {
     Serial.printf("http request: %s\n", httpd.uri().c_str());
     if (!handleFileRead(httpd.uri())) {
       httpd.send(404, "text/plain", "FileNotFound");
       Serial.printf("ERROR: Not found: %s\n", httpd.uri().c_str());
-    } });
+    }
+  });
+
   httpd.begin();
 }
+
 
 void loop_httpd()
 {

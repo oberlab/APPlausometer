@@ -88,7 +88,7 @@
     const CONFIG_KEY = 'applausometer_config_v1';
     const LIST_KEY = 'applausometer_records_v1';
 
-    const defaultConfig = { f1: 1000, f2: 2000, gain: '40', durationMs: 5000 };
+    const defaultConfig = {frq: 2000, gain: '60', duration: 5 };
 
     function loadConfig() {
       try { return { ...defaultConfig, ...(JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}) }; }
@@ -193,17 +193,15 @@
     // --- Config ---
     function loadConfigToForm() {
       const cfg = loadConfig();
-      document.getElementById('f1').value = cfg.f1;
-      document.getElementById('f2').value = cfg.f2;
-      document.getElementById('duration').value = Math.round(cfg.durationMs/1000);
+      document.getElementById('frq').value = cfg.frq;
+      document.getElementById('duration').value = Math.round(cfg.duration);
       document.querySelectorAll('input[name="gain"]').forEach(r => r.checked = r.value === String(cfg.gain));
     }
     function saveConfigFromForm() {
       const cfg = {
-        f1: Number(document.getElementById('f1').value) || defaultConfig.f1,
-        f2: Number(document.getElementById('f2').value) || defaultConfig.f2,
+        frq: Number(document.getElementById('frq').value) || defaultConfig.frq,
         gain: String(document.querySelector('input[name="gain"]:checked')?.value || defaultConfig.gain),
-        durationMs: (Number(document.getElementById('duration').value) || 5) * 1000,
+        duration: (Number(document.getElementById('duration').value) || 5),
       };
       saveConfig(cfg);
       if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ command: 'set_config', config: cfg }));
@@ -228,6 +226,18 @@
 
     // --- Utilities ---
     // no other commands needed in demo
+
+    // --- File Download ---
+    function downloadFile(filename) {
+      // The ESP32 supports in the webserver the file /download?file=...
+      const url = `/download?file=${encodeURIComponent(filename)}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   </script>
   <noscript>Diese Anwendung benötigt JavaScript.</noscript>
   <style id="keyframes">
@@ -308,19 +318,16 @@
           <div class="card" style="grid-column: span 6;">
             <h3>Filter & Messung</h3>
             <div class="row">
-              <label for="f1">Bandpass Ziel F1 (Hz)</label>
-              <input id="f1" type="number" min="10" max="20000" step="1" />
-              <div></div>
-            </div>
-            <div class="row">
-              <label for="f2">Bandpass Ziel F2 (Hz)</label>
-              <input id="f2" type="number" min="10" max="20000" step="1" />
+              <label for="frq">Bandpass Ziel (Hz)</label>
+              <input id="frq" type="number" min="10" max="20000" step="1" />
               <div></div>
             </div>
             <div class="row">
               <label>Verstärkung</label>
               <div>
-                <label style="margin-right:14px"><input type="radio" name="gain" value="40" /> 40 dB</label>
+                <label style="margin-right:14px">
+                <input type="radio" name="gain" value="40" /> 40 dB</label>
+                <label><input type="radio" name="gain" value="50" /> 50 dB</label>
                 <label><input type="radio" name="gain" value="60" /> 60 dB</label>
               </div>
               <div></div>
@@ -334,9 +341,11 @@
 
           <div class="card" style="grid-column: span 6;">
             <h3>Gespeicherte Liste</h3>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn danger" onclick="clearList()">Liste löschen</button>
               <button class="btn" onclick="resetPeaks(true)">Peaks lokal löschen</button>
+              <button class="btn" onclick="downloadFile('config.json')">config.json herunterladen</button>
+              <button class="btn" onclick="downloadFile('counter.csv')">counter.csv herunterladen</button>
             </div>
             <div style="margin-top:14px;">
               <h3>Debug Info</h3>

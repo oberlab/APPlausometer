@@ -4,32 +4,40 @@
 
 #include "websocketd.h"
 #include "status.h"
+#include "analog.h"
+#include "filesystem.h"
+
 
 WebSocketsServer webSocket(81);
 
-// Simple demo signal generator (smooth random walk to target)
-static unsigned long lastGen = 0;
-static unsigned long lastPush = 0;
-static int targetLevel = 20;
+extern SemaphoreHandle_t applause_mutex;
 
-static void stepGenerator() {
-  unsigned long now = millis();
-  // choose new target every ~1.2s
-  static unsigned long lastTarget = 0;
-  if (now - lastTarget > 1200) {
-    targetLevel = random(5, 100);
-    lastTarget = now;
+struct web_events_t system_status;
+struct web_settings_t system_settings;
+
+
+static unsigned long lastPush = 0;
+
+Applause dataApplauseCopy;
+
+
+
+// ToDo: Is this function in the correct module?
+void setup_config(web_events_t *events, web_settings_t *settings)
+{
+  events->update = false;
+  events->button_reset = false;
+  
+  events->level = 0;
+  events->peak = 0;
+
+  if (!loadSettings(settings)) {
+    // sensible defaults for demo
+    settings->frq = SOUND_BANDPASS_FRQ;
+    settings->gain_db = 60;
+    settings->duration = 90; //Seconds
   }
-  // move current level slowly towards target
-  if (now - lastGen >= 40) {
-    lastGen = now;
-    int cur = system_status.level;
-    int diff = targetLevel - cur;
-    cur += constrain(diff / 5, -3, 3); // smooth approach
-    cur = constrain(cur + (int)random(-1, 2), 0, 100); // small jitter
-    system_status.level = cur;
-    if (cur > system_status.peak) system_status.peak = cur;
-  }
+  Serial.printf("Used config: %d, %d, %lu", settings->frq, settings->gain_db, settings->duration);
 }
 
 static String uptimeString() {
@@ -60,19 +68,30 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       const char* cmd = doc["command"] | "";
       if (!*cmd) return;
 
-      if (!strcmp(cmd, "reset_peaks")) {
-        system_status.peak = 0;
+      if (!strcmp(cmd, "reset_peaks")) 
+      {
+        MutexButtonEvent(true);
+
         websocket_update();
-      } else if (!strcmp(cmd, "set_config")) {
+      } 
+      else if (!strcmp(cmd, "set_config")) 
+      {
         JsonVariant cfg = doc["config"];
+        
         if (cfg.is<JsonObject>()) {
-          if (cfg["f1"]) system_status.f1 = cfg["f1"].as<int>();
-          if (cfg["f2"]) system_status.f2 = cfg["f2"].as<int>();
-          if (cfg["gain"]) system_status.gain_db = cfg["gain"].as<int>();
-          if (cfg["durationMs"]) system_status.duration_ms = cfg["durationMs"].as<unsigned long>();
+          if (cfg["frq"]) system_settings.frq = cfg["frq"].as<int>();
+          if (cfg["gain"]) system_settings.gain_db = cfg["gain"].as<int>();
+          if (cfg["duration"]) system_settings.duration = cfg["duration"].as<unsigned long>();
         }
+        Serial.printf("Band pass settings http update: freq=%d Hz, gain=%d, duration=%lus\n", system_settings.frq, system_settings.gain_db, system_settings.duration);
+        MutexUpdateSettings(&system_settings);
+
+        saveSettings(cfg);
+
         websocket_update();
-      } else {
+      } 
+      else 
+      {
         // unknown commands are ignored for the demo
       }
     } break;
@@ -84,15 +103,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
 void websocket_update() {
   StaticJsonDocument<512> doc;
-  doc["level"] = system_status.level;
-  doc["peak"] = system_status.peak;
-  doc["uptime"] = uptimeString();
+  doc["level"] = dataApplauseCopy.finalVolume * 100;
+  doc["peak"]  = dataApplauseCopy.finalPeak * 100;
+  doc["uptime"] = uptimeString();                       // ToDo unnötig, aber andere Zeit für Messdauer einfügen
 
   JsonObject cfg = doc.createNestedObject("cfg");
-  cfg["f1"] = system_status.f1;
-  cfg["f2"] = system_status.f2;
-  cfg["gain"] = system_status.gain_db;
-  cfg["durationMs"] = system_status.duration_ms;
+  cfg["frq"] = system_settings.frq;
+  cfg["gain"] = system_settings.gain_db;
+  cfg["duration"] = system_settings.duration;
 
   String out;
   serializeJson(doc, out);
@@ -107,12 +125,12 @@ void setup_websocketd() {
 void loop_websocketd() {
   webSocket.loop();
 
-  // generate demo signal frequently
-  stepGenerator();
-
   unsigned long now = millis();
   if (now - lastPush >= websocket_update_interval) {
     lastPush = now;
+
+    MutexCopySoundData(&dataApplauseCopy); // Lets use a copy to minimize mutex operations
+   
     websocket_update();
   }
 }
