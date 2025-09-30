@@ -115,7 +115,9 @@ void setup()
   // =================================
   // =   Search Wifi and activate AP
   // =================================  
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.mode(WIFI_AP_STA);
+
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); // Credentials for infrasstructure mode
 
   unsigned long startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 3000) {
@@ -128,24 +130,27 @@ void setup()
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\nNo Wifi found, use AP instead.");
+    Serial.println("\nNo Wifi found, continue with AP only.");
   }
 
-  // Activate mDNS in any case (used by the AP moide only)
-  if (!MDNS.begin("applausometer2025")) {
-    Serial.println("Error setting mDNS hostname!");
+  // Start Hotspot in any case
+  if (!WiFi.softAPConfig(local_IP, gateway, subnet)) {
+    Serial.println("AP Config Failed!");
+  }
+  if (WiFi.softAP(AP_SSID, AP_PASSWORD, 1, 0, MAX_CLIENTS)) {
+    Serial.print("AP started. IP: ");
+    Serial.println(WiFi.softAPIP());
   } else {
-    Serial.println("mDNS hostname set to 'applausometer2025'");
+    Serial.println("AP start failed!");
   }
 
-
+  
   // =================================
   // =   Initialize web services
   // =================================   
   setup_httpd();
   setup_websocketd();
   setup_ota();
-
 }
 
 
@@ -166,6 +171,5 @@ void loop()
       Serial.printf("CPU1 task stack remaining: %d words\n", stackHighWaterMark);  
     }
   }
-
 }
 

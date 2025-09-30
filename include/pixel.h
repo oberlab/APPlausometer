@@ -6,7 +6,7 @@
 
 // ===== LED Band =====
 #define LED_PIN         27     // Pin für WS2812b
-#define LED_COUNT       78     // Anzahl LEDs
+#define LED_COUNT       58     // Anzahl LEDs
 #define LED_SHOW        4      // Anzahl LEDs die angezeigt werden für Ausschlag
 #define LED_PEAK_SHOW   2      // Anzahl LEDs die angezeigt werden für Peak
 

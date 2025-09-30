@@ -3,6 +3,9 @@
 
 // ---------- Peak-Logic ----------
 int peakIndex = 0;
+int peakLastIndex = 0;
+
+
 unsigned long lastPeakUpdate = 0;
 
 
@@ -35,10 +38,12 @@ int showStripLED(float volume, bool resetPeak) {
     }   
   }
 
-  // --- Peak-Logik ---
-  if ((baseIndex) > peakIndex) {
+  peakLastIndex = (peakLastIndex + baseIndex)/2;
+  peakLastIndex = baseIndex;
+
+  if (peakLastIndex > peakIndex) {
     // Set new peak
-    peakIndex = baseIndex;
+    peakIndex = peakLastIndex;
     lastPeakUpdate = millis();
   }
   #ifdef PEAK_FALL_SPEED
