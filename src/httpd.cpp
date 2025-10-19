@@ -120,6 +120,37 @@ void setup_httpd()
     file.close();
   });
 
+  // Upload: via POST /upload mit multipart/form-data
+  httpd.on("/upload", HTTP_POST, []() {
+    httpd.send(200, "text/plain", "Upload successful");
+  }, []() {
+    HTTPUpload& upload = httpd.upload();
+    static File uploadFile;
+
+    if (upload.status == UPLOAD_FILE_START) {
+      String filename = "/" + upload.filename;
+      Serial.printf("Upload start: %s\n", filename.c_str());
+      uploadFile = FILESYSTEM.open(filename, "w");
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (uploadFile) uploadFile.write(upload.buf, upload.currentSize);
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (uploadFile) {
+        uploadFile.close();
+        Serial.printf("Upload finished: %s (%u bytes)\n", upload.filename.c_str(), upload.totalSize);
+      }
+    }
+  });
+
+  // Root handler – serve index.html or fallback text for old Android 4 systems
+  httpd.on("/", HTTP_GET, []() {
+    if (!handleFileRead("/index.html")) {
+      httpd.send(200, "text/html",
+                 "<html><body><h1>APPlausometer</h1>"
+                 "<p>No Web UI found on SPIFFS.</p>"
+                 "</body></html>");
+    }
+  });
+
   // Fallback: static files from SPIFFS via e.g. http://ip/config.json
   httpd.onNotFound([]() {
     Serial.printf("http request: %s\n", httpd.uri().c_str());

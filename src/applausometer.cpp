@@ -27,7 +27,7 @@ extern Applause dataApplause;
 extern web_events_t system_status;
 extern web_settings_t system_settings;
 
-extern SoundStatistic stored_counters[DISPLAY_VERY_LAST_COUNTER];
+extern Applause stored_counters[DISPLAY_VERY_LAST_COUNTER];
 
 
 extern Adafruit_NeoPixel strip;
@@ -82,7 +82,6 @@ void setup_applausometer() {
   read_file(stored_counters, DISPLAY_VERY_LAST_COUNTER);
   
 
-
   digitalWrite(LED_TEST, false);
 }
 
@@ -99,12 +98,12 @@ void loop_applausometer() {
 
   static unsigned int buttonmode = 0;
   static unsigned int page = 0;
-  static unsigned int timebased_measured = 0;
   static bool measurement_active = true;
   static bool resetStripLED = false;
 
   static unsigned long tMonitorLED = 0;
   static unsigned long tMeasurement = 0;
+  static unsigned long tMonitorDisplay = 0;
 
   static ButtonEvent btn_event = BUTTON_NONE;
   static ButtonEvent btn_state = BUTTON_NONE;
@@ -137,7 +136,7 @@ void loop_applausometer() {
   // Time based measurement 
   // ================================= 
   if (now - tMeasurement > 500) {
-    timebased_measured++;
+    dataApplause.timebased_measured++;
 
     tMeasurement = now;
 
@@ -147,11 +146,16 @@ void loop_applausometer() {
           dataApplause.finalVolume, 
           dataApplause.dataDirect.rmsMax, dataApplause.dataBand.rmsMax, 
           dataApplause.dataDirect.rmsTotal, dataApplause.dataBand.rmsTotal);
+
+    //Max Uthoff Test!!! Fliegt dann wieder raus!!! 
+    //int test = DebuggerUpdateSettings();
+    //write_debug(&dataApplause, test);
+    //Max Uthoff Test!!! Fliegt dann wieder raus!!!
   }
 
-  if (timebased_measured > dataApplause.timebased_measured_max) {
+  if (dataApplause.timebased_measured > dataApplause.timebased_measured_max) {
     measurement_active = false;
-    timebased_measured = dataApplause.timebased_measured_max;
+    dataApplause.timebased_measured = dataApplause.timebased_measured_max;
   }  
 
 
@@ -191,7 +195,7 @@ void loop_applausometer() {
 
         save_record(&dataApplause);
 
-        timebased_measured = 0;
+        dataApplause.timebased_measured = 0;
         measurement_active = true;
         resetStripLED = true;
       }      
@@ -222,33 +226,36 @@ void loop_applausometer() {
   progress_vert = (float)(btn_state) / BUTTON_LONG5S; // 0, 0.33, 0.66, 1.0 
   
   // Show a small progress bar on the bottom line to visualize the elapsed time (%) of the measurement 
-  progress_hori = (float)(timebased_measured) / dataApplause.timebased_measured_max; // 0...1 
+  progress_hori = (float)(dataApplause.timebased_measured) / dataApplause.timebased_measured_max; // 0...1 
 
   // Show the correct display of the current mode
-  if (buttonmode == DISPLAY_LOGO && now > 3000)
-    buttonmode = DISPLAY_NORMAL;
+  if (now - tMonitorDisplay > 101) {
+    tMonitorDisplay = now;
+    if (buttonmode == DISPLAY_LOGO && now > 3000)
+      buttonmode = DISPLAY_NORMAL;
 
-  switch (buttonmode) {
-    case DISPLAY_LOGO:                // Start splash
-      display_print_image(); 
-    break;
-
-    case DISPLAY_EXTENDED_INFO:       // Show history and system info
-      if (page < DISPLAY_SYSTEM)
-        display_print_counter(stored_counters, page, DISPLAY_VERY_LAST_COUNTER, progress_vert);
-      else
-        display_print_image();
-        //display_print_system();
-    break;
-
-    case DISPLAY_NORMAL:              // Show current measurement
-    default:                  
-      // Example show time based integrated sum
-      display_print_value(dataApplause.finalResult, 
-                          dataApplause.finalVolume,
-                          dataApplause.finalPeak, 
-                          progress_hori, progress_vert);
+    switch (buttonmode) {
+      case DISPLAY_LOGO:                // Start splash
+        display_print_image(); 
       break;
+
+      case DISPLAY_EXTENDED_INFO:       // Show history and system info
+        if (page < DISPLAY_SYSTEM)
+          display_print_counter(stored_counters, page, DISPLAY_VERY_LAST_COUNTER, progress_vert);
+        else
+          display_print_image();
+          //display_print_system();
+      break;
+
+      case DISPLAY_NORMAL:              // Show current measurement
+      default:                  
+        // Example show time based integrated sum
+        display_print_value(dataApplause.finalResult, 
+                            dataApplause.finalVolume,
+                            dataApplause.finalPeak, 
+                            progress_hori, progress_vert);
+        break;
+    }
   }
 
 
@@ -256,16 +263,24 @@ void loop_applausometer() {
   // Web control
   // =================================  
 
+  // Check if new participant name arrived from web
+  if (system_status.name_updated) {
+    MutexNameEvent();  
+    Serial.printf("Name set by web: %s\n", dataApplause.name);
+  }
+
   if (system_status.button_reset) {       //Reading of the value without semaphore
-        Serial.printf("Reset by web!\n");
+          Serial.printf("Reset by web!\n");
 
-        save_record(&dataApplause);
+          save_record(&dataApplause);
 
-        MutexButtonEvent(false);          //To write the value we will use a semaphore
+          MutexButtonEvent(false);          //To write the value we will use a semaphore
 
-        timebased_measured = 0;
-        measurement_active = true;
-        resetStripLED = true;
+          dataApplause.timebased_measured = 0;
+          measurement_active = true;
+          resetStripLED = true;
+
+          memset(dataApplause.name, 0, APPLAUSE_NAME_SIZE);
 
   }
 

@@ -3,16 +3,19 @@
 #include <stdint.h>
 #include <string>
 
+
+#define APPLAUSE_NAME_SIZE  50
+
+
 struct web_events_t {
-  bool update;        // True, if a new event is detected
-
-  // Measurement
-  int level;        // 0..100
-  int peak;         // 0..100, holds until reset
-
-  // Control
+  bool update;                                // True, if a new event is detected
   bool button_reset;
+  int level;                                  // 0..100
+  int peak;                                   // 0..100, holds until reset
+  char participant_name[APPLAUSE_NAME_SIZE];  // Name from browser
+  bool name_updated;                          // Flag for new name
 };
+
 
 struct web_settings_t {
   // Config

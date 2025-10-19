@@ -1,5 +1,5 @@
 #include "display.h"
-#include "filesystem.h"
+//#include "filesystem.h"
 
 
 
@@ -25,19 +25,28 @@ void setup_display() {
   display.display();
 }
 
+/*********************************************************************************************
+* @brief  Show main data on a small display
+*
+* @param  main_value Large displayed value (typically final counter of the algorithm) (0.0 ... 1.0)
+* @param  value_vol Small displayed value for current volume (0.0 ... 1.0)
+* @param  value_peak SmLL displayed value for peak (0.0 ... 1.0)
+* @param  progress_hori progress bar at the bottom line (e.g. for measurement duration)
+* @param  progress_vert progress bar at the bottom line  
+*
+**********************************************************************************************/
 void display_print_value(float main_value, float value_vol, float value_peak, float progress_hori, float progress_vert) {
     display.clearDisplay();
 
     // Header at left upper corner
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.printf("Vol:%.1f \t Peak:%.1f", value_vol, value_peak);
+	display.printf("Vol:%4.0f  Peak:%4.0f", value_vol * 100, value_peak * 100);
 
     // Main large value in the middle of the display
     display.setTextSize(3);		// Size 3 should cover the complete value, readable
     display.setCursor(0, 30);  	// Position at pixel y~30 (coordinates start at upper left corner with x,y = 0,0 
     display.print(main_value, 2);    // No comma ?!
-
     
 	// Set a progress bar at the 2 bottom lines (0.0 bis 1.0)
     // Set the width of the bar in pixel  (display with a width of e.g. 128 pixel)
@@ -57,7 +66,7 @@ void display_print_value(float main_value, float value_vol, float value_peak, fl
 }
 
 
-void display_print_counter(SoundStatistic *pdata, size_t index, size_t elements, float progress_vert) {
+void display_print_counter(Applause *pdata, size_t index, size_t elements, float progress_vert) {
 	char buf[100];
 
 	if (index >= elements)
@@ -69,13 +78,16 @@ void display_print_counter(SoundStatistic *pdata, size_t index, size_t elements,
     display.setTextSize(1);
     display.setCursor(0, 0);
 
-	sprintf(buf, "ID: %lu   Peak: %.1f", pdata[index].id, pdata[index].ClapMaxRms);
+	sprintf(buf, "ID: %lu   Peak: %4.0f", index, pdata[index].dataDirect.rmsMax*100);
 	display.print(buf);
 
     // Main large value in the middle of the display
     display.setTextSize(3);		// Size 3 should cover the complete value, readable
     display.setCursor(0, 30);   // Position at pixel y~30 (coordinates start at upper left corner with x,y = 0,0 
-    display.print(pdata[index].ClapTotalClap, 0);   // No comma ?!
+
+	sprintf(buf, "%4.1f", pdata[index].dataDirect.dataCount);
+	display.print(buf);
+    //display.print(pdata[index].dataDirect.dataCount, 0);   // No comma ?!
 
 	// Set a progress bar at the right size with 2 lines (0.0 bis 1.0)
     // Set the length of the bar in pixel  (display with a length of e.g. 64 pixel)

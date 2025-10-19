@@ -29,7 +29,6 @@
 
 
 // We want to store a name for the applause result  
-#define APPLAUSE_NAME_SIZE  50
 #define SOUND_BANDPASS_FRQ  1500.0f
 
 
@@ -85,8 +84,10 @@ float rmsTotal = 0;
 };
 
 struct Applause {
+unsigned long id;
 SoundData dataBand;
 SoundData dataDirect;
+unsigned int timebased_measured = 0;
 unsigned int timebased_measured_max;
 float finalVolume = 0;
 float finalPeak = 0;
@@ -112,8 +113,11 @@ bool block_rms(float& rmsBand, float& rmsDirect);
 
 // Make a copy of the data for other cpu tasks
 void MutexCopySoundData(Applause *copyApplause);
+void MutexNameEvent(void);
 void MutexButtonEvent(bool state);
 void MutexUpdateSettings(web_settings_t *settings);
 
 // Application Applause algorithm
 void applause_algorithm();
+
+int DebuggerUpdateSettings();

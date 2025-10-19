@@ -27,8 +27,11 @@
 
 // Hotspot settings
 #define AP_SSID "APPlausometer"
-#define AP_PASSWORD "9456!jGnxuw78#"
-#define MAX_CLIENTS 3
+#ifndef WIFI_SSID
+#define AP_PASSWORD "APPlaus!1234"
+#endif
+
+#define MAX_CLIENTS 6
 
 // Eigene AP-Netzwerk-Config
 IPAddress local_IP(192, 168, 4, 1);

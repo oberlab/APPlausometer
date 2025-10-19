@@ -28,11 +28,14 @@ Biquad soundBandPass;
 void setup_analog(){
   // Config bands
   soundBandPass.setBandpass((float)SAMPLE_RATE, SOUND_BANDPASS_FRQ , SOUND_BANDPASS_QUALITY );
+  
+  dataApplause.id = 0;
   reset_sound_data(&dataApplause.dataDirect);
   reset_sound_data(&dataApplause.dataBand);
 
   setup_max9814_gain(GAIN_50DB);
 
+  dataApplause.timebased_measured = 0;
   dataApplause.timebased_measured_max = 2 * 120; // Example 2: Update every 0,5s 120 for 2 minutes
 
   Serial.printf("Band pass: fc=%.1f Hz, Q=%.2f, Quality=%.3f\n", SOUND_BANDPASS_FRQ , SOUND_BANDPASS_QUALITY , THRESHOLD_SOUND );
@@ -130,6 +133,21 @@ void MutexButtonEvent(bool state) {
         system_status.button_reset = state;
       xSemaphoreGive(applause_mutex);
   } 
+}
+
+/*********************************************************************************************
+* @brief  MutexNameEvent
+*         Used for multithreading operations to the same data  
+*
+**********************************************************************************************/
+void MutexNameEvent(void) {
+  if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // Copy name to current applause data
+    strncpy(dataApplause.name, system_status.participant_name, APPLAUSE_NAME_SIZE - 1);
+    dataApplause.name[APPLAUSE_NAME_SIZE - 1] = '\0';
+    system_status.name_updated = false;
+    xSemaphoreGive(applause_mutex);
+  }
 }
 
 /*********************************************************************************************
@@ -272,4 +290,40 @@ void applause_algorithm() {
 #endif
 
   dataApplause.finalPeak   = dataApplause.dataDirect.rmsMax; // + dataApplause.dataBand.rmsMax;
+}
+
+
+//Debugging test life
+int DebuggerUpdateSettings() {
+  static int test = 0;
+
+  test++;
+  if (test == 2) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_60DB);
+  }  
+  if (test == 42) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_50DB);
+  }
+  if (test == 82) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_40DB);
+  }
+  if (test == 122) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_60DB);
+  }  
+  if (test == 162) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_50DB);
+  }
+  if (test == 202) {
+    dataApplause.timebased_measured_max = 9999;
+    setup_max9814_gain(GAIN_40DB);
+  }
+  if (test == 242) {
+    test = 0;
+  }
+  return test;
 }

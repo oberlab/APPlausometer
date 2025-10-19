@@ -80,21 +80,19 @@
   <script>
     // --- State ---
     const WS_URL = `ws://${location.hostname}:81`;
+    //const WS_URL = `ws://${location.host}/`; // kein Port 81!
+    //const WS_URL = `ws://${location.hostname}`;
+
     let ws;
     let lastMessage = {};
     let connected = false;
     let meterDefs = [ { id: 'm0', label: 'Lautstärke', peak: 0, value: 0 } ];
+    let currentConfig = {frq: 1500, gain: 60, duration: 90};
+    let currentID = 0;
+    let currentName = '';
 
-    const CONFIG_KEY = 'applausometer_config_v1';
     const LIST_KEY = 'applausometer_records_v1';
 
-    const defaultConfig = {frq: 2000, gain: '60', duration: 5 };
-
-    function loadConfig() {
-      try { return { ...defaultConfig, ...(JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}) }; }
-      catch { return { ...defaultConfig }; }
-    }
-    function saveConfig(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); }
     function loadList() { try { return JSON.parse(localStorage.getItem(LIST_KEY)) || []; } catch { return []; } }
     function saveList(list) { localStorage.setItem(LIST_KEY, JSON.stringify(list)); }
 
@@ -106,15 +104,53 @@
       ws.onclose = () => { connected = false; updateConnUI(); setTimeout(connectWS, 1500); };
       ws.onerror = () => { connected = false; updateConnUI(); };
       ws.onmessage = (ev) => {
-        try { lastMessage = JSON.parse(ev.data); } catch { lastMessage = { raw: String(ev.data).slice(0, 400) }; }
-        document.getElementById('debug').value = JSON.stringify(lastMessage, null, 2);
-        // Map incoming fields to our meter(s)
-        // Expected optional fields: level (0..100), peak (0..100)
-        const level = clamp( resolveNumber(lastMessage.level, lastMessage.number, Math.round(Math.random()*100)), 0, 100 );
-        const peak = clamp( resolveNumber(lastMessage.peak, null, null), 0, 100 );
-        setMeter(0, level, peak);
-        // Update uptime if provided
-        if (lastMessage.uptime) document.getElementById('uptime').textContent = lastMessage.uptime;
+        try {
+          lastMessage = JSON.parse(ev.data);
+
+          // Update config from ESP32
+          if (lastMessage.cfg) {
+            currentConfig = lastMessage.cfg;
+            loadConfigToForm();
+          }
+
+          // Update ID and Name from ESP32
+          if (lastMessage.id !== undefined) {
+            currentID = lastMessage.id;
+          }
+          if (lastMessage.name !== undefined) {
+            currentName = lastMessage.name || '';
+          }
+          updateParticipantDisplay();
+
+          // Update measurement values display
+          if (lastMessage.finalVolume !== undefined) {
+            document.getElementById('displayVolume').textContent = (lastMessage.finalVolume).toFixed(1) + '%';
+          }
+          if (lastMessage.finalPeak !== undefined) {
+            document.getElementById('displayPeak').textContent = (lastMessage.finalPeak).toFixed(1) + '%';
+          }
+          if (lastMessage.timebased_measured !== undefined) {
+            document.getElementById('displayTime').textContent = (lastMessage.timebased_measured).toFixed(0) + 's';
+          }
+          if (lastMessage.finalResult !== undefined) {
+            document.getElementById('displayResult').textContent = (lastMessage.finalResult).toFixed(1);
+          }
+
+          document.getElementById('debug').value = JSON.stringify(lastMessage, null, 2);
+
+          // Map incoming fields to our meter(s)
+          // level and peak are now the same as finalVolume and finalPeak (already in percent)
+          const level = clamp(resolveNumber(lastMessage.finalVolume, 0), 0, 100);
+          const peak = clamp(resolveNumber(lastMessage.finalPeak, 0), 0, 100);
+
+          setMeter(0, level, peak);
+
+          // Update uptime if provided
+          if (lastMessage.uptime) document.getElementById('uptime').textContent = lastMessage.uptime;
+        } catch (e) {
+          console.error('WebSocket parse error:', e);
+          lastMessage = { raw: String(ev.data).slice(0, 400) };
+        }
       };
     }
 
@@ -130,6 +166,27 @@
       dot.className = 'dot' + (connected ? ' ok' : '');
       text.textContent = connected ? 'WebSocket verbunden' : 'WebSocket getrennt';
       document.getElementById('resetPeaks').disabled = !connected;
+      document.getElementById('setNameBtn').disabled = !connected;
+    }
+
+    function updateParticipantDisplay() {
+      const idEl = document.getElementById('participantID');
+      const nameEl = document.getElementById('participantName');
+
+      if (currentID > 0) {
+        idEl.textContent = `ID: ${currentID}`;
+        idEl.style.display = 'block';
+      } else {
+        idEl.style.display = 'none';
+      }
+
+      // Check if name is empty, "---", or only whitespace
+      const cleanName = String(currentName || '').trim().replace(/\0/g, '');
+      if (cleanName && cleanName !== '---') {
+        nameEl.textContent = cleanName;
+      } else {
+        nameEl.textContent = '---';
+      }
     }
 
     // --- Mixer meter logic ---
@@ -155,11 +212,26 @@
       meterDefs.forEach((m, i) => {
         const fill = document.querySelector(`[data-meter="${i}"] .meter-fill`);
         const peak = document.querySelector(`[data-meter="${i}"] .meter-peak`);
-        const val = document.querySelector(`[data-meter="${i}"] .value`);
         if (fill) fill.style.height = `${m.value}%`;
         if (peak) peak.style.bottom = `${m.peak}%`;
-        if (val) val.textContent = `${m.value.toFixed(0)}%`;
       });
+    }
+
+    // --- Participant Name ---
+    function setParticipantName() {
+      const name = document.getElementById('participantNameInput').value.trim();
+      if (!name) {
+        alert('Bitte einen Namen eingeben.');
+        return;
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: 'set_name', name: name }));
+        // Name wird beim nächsten WebSocket-Update angezeigt
+        document.getElementById('participantNameInput').value = '';
+      } else {
+        alert('WebSocket nicht verbunden!');
+      }
     }
 
     // --- Records ---
@@ -192,20 +264,28 @@
 
     // --- Config ---
     function loadConfigToForm() {
-      const cfg = loadConfig();
-      document.getElementById('frq').value = cfg.frq;
-      document.getElementById('duration').value = Math.round(cfg.duration);
-      document.querySelectorAll('input[name="gain"]').forEach(r => r.checked = r.value === String(cfg.gain));
+      document.getElementById('frq').value = currentConfig.frq || 1500;
+      document.getElementById('duration').value = Math.round(currentConfig.duration || 90);
+      const gainValue = String(currentConfig.gain || 60);
+      document.querySelectorAll('input[name="gain"]').forEach(r => {
+        r.checked = r.value === gainValue;
+      });
     }
     function saveConfigFromForm() {
       const cfg = {
-        frq: Number(document.getElementById('frq').value) || defaultConfig.frq,
-        gain: String(document.querySelector('input[name="gain"]:checked')?.value || defaultConfig.gain),
-        duration: (Number(document.getElementById('duration').value) || 5),
+        frq: Number(document.getElementById('frq').value) || 1500,
+        gain: String(document.querySelector('input[name="gain"]:checked')?.value || '60'),
+        duration: Number(document.getElementById('duration').value) || 90,
       };
-      saveConfig(cfg);
-      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ command: 'set_config', config: cfg }));
-      alert('Konfiguration gespeichert');
+
+      currentConfig = cfg;
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: 'set_config', config: cfg }));
+        alert('Konfiguration an ESP32 gesendet und gespeichert');
+      } else {
+        alert('WebSocket nicht verbunden! Konfiguration konnte nicht gespeichert werden.');
+      }
     }
 
     // --- Tabs ---
@@ -219,9 +299,9 @@
     // --- Init ---
     window.addEventListener('load', () => {
       connectWS();
-      loadConfigToForm();
       renderList();
       renderMeters();
+      updateParticipantDisplay();
     });
 
     // --- Utilities ---
@@ -265,23 +345,63 @@
         <div class="grid" style="grid-template-columns: repeat(12, 1fr);">
           <div class="card" style="grid-column: span 5;">
             <h3>Aktuelle Messwerte</h3>
-            <div class="mixer">
-              <div class="strip">
-                <div class="meter-box" data-meter="0">
-                  <div class="meter-fill"></div>
-                  <div class="meter-peak" style="bottom:0"></div>
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <div class="mixer">
+                <div class="strip">
+                  <div class="meter-box" data-meter="0">
+                    <div class="meter-fill"></div>
+                    <div class="meter-peak" style="bottom:0"></div>
+                  </div>
+                  <label>Lautstärke</label>
                 </div>
-                <label>Lautstärke</label>
-                <div class="value">0%</div>
+              </div>
+
+              <!-- Measurement Values Display (centered) -->
+              <div style="margin-top: 16px; text-align: center; width: 100%;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                  <div style="background: #0f141d; padding: 10px; border-radius: 8px; border: 1px solid var(--muted);">
+                    <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Volume</div>
+                    <div id="displayVolume" style="font-size: 20px; font-weight: 700; color: var(--brand);">0.0%</div>
+                  </div>
+                  <div style="background: #0f141d; padding: 10px; border-radius: 8px; border: 1px solid var(--muted);">
+                    <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Peak</div>
+                    <div id="displayPeak" style="font-size: 20px; font-weight: 700; color: var(--warn);">0.0%</div>
+                  </div>
+                  <div style="background: #0f141d; padding: 10px; border-radius: 8px; border: 1px solid var(--muted);">
+                    <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Time</div>
+                    <div id="displayTime" style="font-size: 20px; font-weight: 700; color: var(--ok);">0s</div>
+                  </div>
+                  <div style="background: #0f141d; padding: 10px; border-radius: 8px; border: 1px solid var(--muted);">
+                    <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Result</div>
+                    <div id="displayResult" style="font-size: 20px; font-weight: 700; color: var(--accent);">0.0</div>
+                  </div>
+                </div>
+
+                <!-- Participant Info Display -->
+                <div style="background: #0f141d; padding: 12px; border-radius: 8px; border: 1px solid var(--muted);">
+                  <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Aktueller Teilnehmer</div>
+                  <div id="participantID" style="font-size: 12px; color: var(--sub); font-family: monospace; display:none; margin-bottom: 4px;">ID: -</div>
+                  <div id="participantName" style="font-size: 16px; color: var(--ink); font-weight: 500;">---</div>
+                </div>
+              </div>
+
+              <div style="margin-top:12px; display:flex; gap:8px;">
+                <button class="btn" id="resetPeaks" onclick="resetPeaks(false)">Peaks zurücksetzen</button>
               </div>
             </div>
-            <div style="margin-top:12px; display:flex; gap:8px;">
-              <button class="btn" id="resetPeaks" onclick="resetPeaks(false)">Peaks zurücksetzen</button>
+
+            <!-- Set Participant Name -->
+            <div style="margin-top:14px;">
+              <h3>Teilnehmer Name setzen</h3>
+              <div style="display:flex; gap:8px;">
+                <input id="participantNameInput" type="text" placeholder="Name eingeben" style="flex:1;" />
+                <button class="btn primary" id="setNameBtn" onclick="setParticipantName()">Name setzen</button>
+              </div>
             </div>
           </div>
 
           <div class="card" style="grid-column: span 7;">
-            <h3>Teilnehmer speichern</h3>
+            <h3>Teilnehmer speichern (Browser-Liste)</h3>
             <div class="row">
               <label for="recId">ID</label>
               <input id="recId" type="text" placeholder="z.B. 42" />
@@ -294,7 +414,7 @@
             </div>
 
             <div style="margin-top:14px;">
-              <h3>Gespeicherte Liste</h3>
+              <h3>Gespeicherte Liste (Browser)</h3>
               <div id="listEmpty" style="color: var(--sub); font-size: 13px; padding: 8px 0;">Keine Einträge vorhanden.</div>
               <table>
                 <thead>
@@ -325,9 +445,8 @@
             <div class="row">
               <label>Verstärkung</label>
               <div>
-                <label style="margin-right:14px">
-                <input type="radio" name="gain" value="40" /> 40 dB</label>
-                <label><input type="radio" name="gain" value="50" /> 50 dB</label>
+                <label style="margin-right:14px"><input type="radio" name="gain" value="40" /> 40 dB</label>
+                <label style="margin-right:14px"><input type="radio" name="gain" value="50" /> 50 dB</label>
                 <label><input type="radio" name="gain" value="60" /> 60 dB</label>
               </div>
               <div></div>
@@ -346,6 +465,7 @@
               <button class="btn" onclick="resetPeaks(true)">Peaks lokal löschen</button>
               <button class="btn" onclick="downloadFile('config.json')">config.json herunterladen</button>
               <button class="btn" onclick="downloadFile('counter.csv')">counter.csv herunterladen</button>
+              <button class="btn" onclick="downloadFile('debugging.csv')">debugging.csv herunterladen</button>
             </div>
             <div style="margin-top:14px;">
               <h3>Debug Info</h3>
