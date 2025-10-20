@@ -18,10 +18,9 @@ struct web_events_t {
 
 
 struct web_settings_t {
-  // Config
-  int frq;                 // Hz
-  int gain_db;            // 40 or 60
-  unsigned long duration; // measurement duration
+  int frq;                                    // Hz
+  int gain_db;                                // 40, 50 or 60 dB
+  unsigned long duration;                     // measurement duration in seconds
 };
 
 void setup_config(web_events_t *events, web_settings_t *settings);

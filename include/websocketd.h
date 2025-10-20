@@ -6,4 +6,7 @@ const unsigned long websocket_update_interval = 100;
 
 void setup_websocketd();
 void loop_websocketd();
-void websocket_update();
+void ws_update_livedata();
+void ws_update_storedrecords();
+void ws_update_config();
+

@@ -5,6 +5,7 @@
 #include "websocketd.h"
 #include "status.h"
 #include "analog.h"
+#include "applausometer.h"
 #include "filesystem.h"
 
 
@@ -12,18 +13,18 @@ WebSocketsServer webSocket(81);
 
 extern SemaphoreHandle_t applause_mutex;
 extern Applause dataApplause;
+extern Applause stored_counters[DISPLAY_VERY_LAST_COUNTER];  // NEU: extern Deklaration
 
 struct web_events_t system_status;
 struct web_settings_t system_settings;
 
 
 static unsigned long lastPush = 0;
+static unsigned long lastListPush = 0;
 
 Applause dataApplauseCopy;
 
 
-
-// ToDo: Is this function in the correct module?
 void setup_config(web_events_t *events, web_settings_t *settings)
 {
     events->update = false;
@@ -39,7 +40,8 @@ void setup_config(web_events_t *events, web_settings_t *settings)
         settings->gain_db = 60;
         settings->duration = 90; //Seconds
     }
-    Serial.printf("Used config: %d, %d, %lu\n", settings->frq, settings->gain_db, settings->duration);
+    MutexUpdateSettings(&system_settings);
+    Serial.printf("Used config: band=%dHz, gain=%ddB, duration=%lus\n", settings->frq, settings->gain_db, settings->duration);
 }
 
 static String uptimeString() {
@@ -62,7 +64,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
         case WStype_CONNECTED: {
             IPAddress ip = webSocket.remoteIP(num);
             Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-            websocket_update();
+            ws_update_livedata();
+            ws_update_storedrecords();  // Get history during Connect
+            ws_update_config();         // Get config during Connect
         } break;
 
         case WStype_TEXT: {
@@ -73,12 +77,14 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
             const char* cmd = doc["command"] | "";
             if (!*cmd) return;
 
-            if (!strcmp(cmd, "reset_peaks"))
+            if (!strcmp(cmd, "reset_peaks"))                //Start new applause measuring
             {
                 MutexButtonEvent(true);
-                websocket_update();
+                ws_update_livedata();
+                updateList(&dataApplause, true);                
+                ws_update_storedrecords();
             }
-            else if (!strcmp(cmd, "set_config"))
+            else if (!strcmp(cmd, "set_config"))           //Configuration is set
             {
                 JsonVariant cfg = doc["config"];
                 if (cfg.is<JsonObject>()) {
@@ -86,15 +92,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                     if (cfg["gain"]) system_settings.gain_db = cfg["gain"].as<int>();
                     if (cfg["duration"]) system_settings.duration = cfg["duration"].as<unsigned long>();
                 }
-                Serial.printf("Band pass settings http update: freq=%d Hz, gain=%d, duration=%lus\n",
+                Serial.printf("Settings update: freq=%dHz, gain=%ddB, duration=%lus\n",
                               system_settings.frq, system_settings.gain_db, system_settings.duration);
                 MutexUpdateSettings(&system_settings);
-                saveSettings(cfg);
-                websocket_update();
+                ws_update_config();
             }
-            else if (!strcmp(cmd, "set_name"))
+            else if (!strcmp(cmd, "set_name"))          // Receive participant name from browser
             {
-                // NEW: Receive participant name from browser
                 const char* name = doc["name"] | "";
                 if (strlen(name) > 0) {
                     if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -105,7 +109,8 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                         Serial.printf("Participant name received: %s\n", name);
                     }
                 }
-                websocket_update();
+                ws_update_livedata();
+                ws_update_storedrecords();
             }
             else
             {
@@ -119,16 +124,13 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     }
 }
 
-void websocket_update() {
+void ws_update_livedata() {
     StaticJsonDocument<512> doc;
     doc["level"] = dataApplauseCopy.finalVolume * 100;
     doc["peak"] = dataApplauseCopy.finalPeak * 100;
-    doc["uptime"] = uptimeString(); // ToDo unnötig, aber andere Zeit für Messdauer einfügen
+    doc["uptime"] = uptimeString();
 
-    // Send current ID
-    doc["id"] = dataApplauseCopy.id;
-
-    // Send name: prefer system_status.participant_name if set, otherwise use dataApplauseCopy.name
+    // Name logic
     if (strlen(system_status.participant_name) > 0) {
         doc["name"] = system_status.participant_name;
     } else if (strlen(dataApplauseCopy.name) > 0) {
@@ -137,20 +139,42 @@ void websocket_update() {
         doc["name"] = "---";
     }
 
-    // Send measurement values
     doc["finalVolume"] = dataApplauseCopy.finalVolume * 100;
     doc["finalPeak"] = dataApplauseCopy.finalPeak * 100;
     doc["finalResult"] = dataApplauseCopy.finalResult;
-    doc["timebased_measured"] = dataApplauseCopy.timebased_measured;
+    doc["timebased_measured"] = dataApplauseCopy.timebased_measured_max - dataApplauseCopy.timebased_measured;  // Countdown
 
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
+}
+
+void ws_update_config() {
+    StaticJsonDocument<256> doc;
     JsonObject cfg = doc.createNestedObject("cfg");
     cfg["frq"] = system_settings.frq;
     cfg["gain"] = system_settings.gain_db;
     cfg["duration"] = system_settings.duration;
 
-    String out;
-    serializeJson(doc, out);
-    webSocket.broadcastTXT(out);
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
+}
+
+void ws_update_storedrecords() {
+    StaticJsonDocument<2048> doc;
+    JsonArray arr = doc.createNestedArray("records"); 
+
+    for (size_t i = 0; i < DISPLAY_VERY_LAST_COUNTER; i++) {
+        JsonObject o = arr.createNestedObject();
+        o["name"] = stored_counters[i].name;
+        o["finalPeak"] = stored_counters[i].finalPeak*100;
+        o["finalResult"] = stored_counters[i].finalResult;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
 }
 
 void setup_websocketd() {
@@ -164,6 +188,10 @@ void loop_websocketd() {
     if (now - lastPush >= websocket_update_interval) {
         lastPush = now;
         MutexCopySoundData(&dataApplauseCopy); // Lets use a copy to minimize mutex operations
-        websocket_update();
+        ws_update_livedata();
     }
-}
+    if (now - lastListPush >= websocket_update_interval*10-7) {
+        lastListPush = now;
+        //MutexCopySoundData(&dataApplauseCopy); // Lets use a copy to minimize mutex operations
+        ws_update_storedrecords();
+    }}

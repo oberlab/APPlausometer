@@ -135,7 +135,7 @@ void loop_applausometer() {
   // =================================
   // Time based measurement 
   // ================================= 
-  if (now - tMeasurement > 500) {
+  if (now - tMeasurement > 1000) {
     dataApplause.timebased_measured++;
 
     tMeasurement = now;
@@ -193,7 +193,7 @@ void loop_applausometer() {
       {
         Serial.printf("Reset by button!\n");
 
-        save_record(&dataApplause);
+        updateList(&dataApplause, true);
 
         dataApplause.timebased_measured = 0;
         measurement_active = true;
@@ -214,6 +214,7 @@ void loop_applausometer() {
       break;
 
     default:
+      updateList(&dataApplause, false);
       break;
   }
   vTaskDelay(1);
@@ -269,19 +270,17 @@ void loop_applausometer() {
     Serial.printf("Name set by web: %s\n", dataApplause.name);
   }
 
-  if (system_status.button_reset) {       //Reading of the value without semaphore
+  if (system_status.button_reset) {           // Reading of the value without semaphore
           Serial.printf("Reset by web!\n");
 
-          save_record(&dataApplause);
+          updateList(&dataApplause, true);    // See display button management, which controls updateList(..., false) also for normal updates 
 
-          MutexButtonEvent(false);          //To write the value we will use a semaphore
+          MutexButtonEvent(false);            // To write the value we will use a semaphore
 
           dataApplause.timebased_measured = 0;
           measurement_active = true;
           resetStripLED = true;
 
-          memset(dataApplause.name, 0, APPLAUSE_NAME_SIZE);
-
+          strcpy(dataApplause.name, "---");
   }
-
 }

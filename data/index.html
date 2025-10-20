@@ -80,8 +80,6 @@
   <script>
     // --- State ---
     const WS_URL = `ws://${location.hostname}:81`;
-    //const WS_URL = `ws://${location.host}/`; // kein Port 81!
-    //const WS_URL = `ws://${location.hostname}`;
 
     let ws;
     let lastMessage = {};
@@ -90,11 +88,13 @@
     let currentConfig = {frq: 1500, gain: 60, duration: 90};
     let currentID = 0;
     let currentName = '';
+    let storedRecords = [];  // Records from ESP32
 
     const LIST_KEY = 'applausometer_records_v1';
 
+    // Keep localStorage functions for potential future use, but use ESP32 data
     function loadList() { try { return JSON.parse(localStorage.getItem(LIST_KEY)) || []; } catch { return []; } }
-    function saveList(list) { localStorage.setItem(LIST_KEY, JSON.stringify(list)); }
+    //function saveList(list) { localStorage.setItem(LIST_KEY, JSON.stringify(list)); }
 
     // --- WebSocket ---
     function connectWS() {
@@ -120,6 +120,14 @@
           if (lastMessage.name !== undefined) {
             currentName = lastMessage.name || '';
           }
+
+          // Update stored records from ESP32
+          if (lastMessage.records !== undefined) {
+            console.log('Received records from ESP32:', lastMessage.records);
+            storedRecords = lastMessage.records;
+            renderList();
+          }
+
           updateParticipantDisplay();
 
           // Update measurement values display
@@ -170,15 +178,7 @@
     }
 
     function updateParticipantDisplay() {
-      const idEl = document.getElementById('participantID');
       const nameEl = document.getElementById('participantName');
-
-      if (currentID > 0) {
-        idEl.textContent = `ID: ${currentID}`;
-        idEl.style.display = 'block';
-      } else {
-        idEl.style.display = 'none';
-      }
 
       // Check if name is empty, "---", or only whitespace
       const cleanName = String(currentName || '').trim().replace(/\0/g, '');
@@ -235,30 +235,18 @@
     }
 
     // --- Records ---
-    function addRecord() {
-      const id = document.getElementById('recId').value.trim();
-      const name = document.getElementById('recName').value.trim();
-      const value = meterDefs[0]?.value ?? 0;
-      if (!id || !name) { alert('Bitte ID und Name angeben.'); return; }
-      const list = loadList();
-      list.push({ id, name, value: Math.round(value), ts: Date.now() });
-      saveList(list);
-      renderList();
-      document.getElementById('recName').value = '';
-    }
-    function clearList() { if (!confirm('Gespeicherte Liste wirklich löschen?')) return; saveList([]); renderList(); }
+    //function clearList() { if (!confirm('Gespeicherte Liste wirklich löschen?')) return; saveList([]); renderList(); }
     function renderList() {
       const tbody = document.getElementById('listBody');
-      const list = loadList();
-      tbody.innerHTML = list.map((r, idx) => `
+      tbody.innerHTML = storedRecords.map((r, idx) => `
         <tr>
           <td>${idx+1}</td>
-          <td>${escapeHtml(r.id)}</td>
-          <td>${escapeHtml(r.name)}</td>
-          <td style="text-align:right">${r.value}</td>
+          <td>${escapeHtml(r.name || '---')}</td>
+          <td style="text-align:right">${(r.finalPeak || 0).toFixed(1)}</td>
+          <td style="text-align:right">${(r.finalResult || 0).toFixed(1)}</td>
         </tr>
       `).join('');
-      document.getElementById('listEmpty').style.display = list.length ? 'none' : 'block';
+      document.getElementById('listEmpty').style.display = storedRecords.length ? 'none' : 'block';
     }
     function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])); }
 
@@ -380,13 +368,12 @@
                 <!-- Participant Info Display -->
                 <div style="background: #0f141d; padding: 12px; border-radius: 8px; border: 1px solid var(--muted);">
                   <div style="font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">Aktueller Teilnehmer</div>
-                  <div id="participantID" style="font-size: 12px; color: var(--sub); font-family: monospace; display:none; margin-bottom: 4px;">ID: -</div>
                   <div id="participantName" style="font-size: 16px; color: var(--ink); font-weight: 500;">---</div>
                 </div>
               </div>
 
               <div style="margin-top:12px; display:flex; gap:8px;">
-                <button class="btn" id="resetPeaks" onclick="resetPeaks(false)">Peaks zurücksetzen</button>
+                <button class="btn primary" id="resetPeaks" onclick="resetPeaks(false)">Applausmessung Start</button>
               </div>
             </div>
 
@@ -401,28 +388,16 @@
           </div>
 
           <div class="card" style="grid-column: span 7;">
-            <h3>Teilnehmer speichern (Browser-Liste)</h3>
-            <div class="row">
-              <label for="recId">ID</label>
-              <input id="recId" type="text" placeholder="z.B. 42" />
-              <div></div>
-            </div>
-            <div class="row">
-              <label for="recName">Name</label>
-              <input id="recName" type="text" placeholder="z.B. Team Alpha" />
-              <button class="btn primary" onclick="addRecord()">Speichern</button>
-            </div>
-
+            <h3>Gespeicherte Applausmessungen</h3>
             <div style="margin-top:14px;">
-              <h3>Gespeicherte Liste (Browser)</h3>
               <div id="listEmpty" style="color: var(--sub); font-size: 13px; padding: 8px 0;">Keine Einträge vorhanden.</div>
               <table>
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>ID</th>
                     <th>Name</th>
-                    <th style="text-align:right">Messwert</th>
+                    <th style="text-align:right">Peak</th>
+                    <th style="text-align:right">Result</th>
                   </tr>
                 </thead>
                 <tbody id="listBody"></tbody>
@@ -436,7 +411,7 @@
       <section class="pane" id="pane-config">
         <div class="grid">
           <div class="card" style="grid-column: span 6;">
-            <h3>Filter & Messung</h3>
+            <h3>Einstellungen für Applausmessung</h3>
             <div class="row">
               <label for="frq">Bandpass Ziel (Hz)</label>
               <input id="frq" type="number" min="10" max="20000" step="1" />
@@ -459,9 +434,8 @@
           </div>
 
           <div class="card" style="grid-column: span 6;">
-            <h3>Gespeicherte Liste</h3>
+            <h3>Dateiaktionen</h3>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn danger" onclick="clearList()">Liste löschen</button>
               <button class="btn" onclick="resetPeaks(true)">Peaks lokal löschen</button>
               <button class="btn" onclick="downloadFile('config.json')">config.json herunterladen</button>
               <button class="btn" onclick="downloadFile('counter.csv')">counter.csv herunterladen</button>

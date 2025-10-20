@@ -88,7 +88,7 @@ unsigned long id;
 SoundData dataBand;
 SoundData dataDirect;
 unsigned int timebased_measured = 0;
-unsigned int timebased_measured_max;
+unsigned int timebased_measured_max = 0;
 float finalVolume = 0;
 float finalPeak = 0;
 float finalResult = 0;

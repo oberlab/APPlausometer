@@ -33,12 +33,13 @@ void setup_analog(){
   reset_sound_data(&dataApplause.dataDirect);
   reset_sound_data(&dataApplause.dataBand);
 
+// Set in an very eary state somewhere else!
+/*
   setup_max9814_gain(GAIN_50DB);
-
   dataApplause.timebased_measured = 0;
-  dataApplause.timebased_measured_max = 2 * 120; // Example 2: Update every 0,5s 120 for 2 minutes
-
+  dataApplause.timebased_measured_max = 120; // Example 2: Update every 0,5s 120 for 2 minutes
   Serial.printf("Band pass: fc=%.1f Hz, Q=%.2f, Quality=%.3f\n", SOUND_BANDPASS_FRQ , SOUND_BANDPASS_QUALITY , THRESHOLD_SOUND );
+*/
 }
 
 /*********************************************************************************************
