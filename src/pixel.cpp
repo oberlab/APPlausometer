@@ -11,7 +11,11 @@ unsigned long lastPeakUpdate = 0;
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-// Helper: Volume (0.0–1.0) --> LED-Index
+
+/*********************************************************************************************
+ * @brief Helper: Volume (0.0–1.0) --> LED-Index
+ *  
+ *********************************************************************************************/
 int volumeToLedIndex(float volume) {
   // volume: 0.0 ... 1.0
   if (volume < 0.0) volume = 0.0;
@@ -20,7 +24,16 @@ int volumeToLedIndex(float volume) {
   return (int)(volume * LED_COUNT);
 }
 
-
+/*********************************************************************************************
+ * @brief showStripLED supports the LED strips
+ *        To save power, just 4 LED will be displayed (with changing the color if it moves higher)
+ *        Additionally, the peak will be displayed. The peak will remain for a whiel but then it will 
+ *        slowly go down
+ *        
+ * @param volume    Value to show as main effect (valid: 0...1)
+ * @param resetPeak Reset peak immediately to the bottom, if true
+ *  
+ *********************************************************************************************/
 int showStripLED(float volume, bool resetPeak) {
   strip.clear();
 

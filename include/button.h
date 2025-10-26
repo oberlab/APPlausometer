@@ -7,7 +7,6 @@
 #define BUTTON_PIN 32
 
 
-// --- Our definition: true (BTN_RELEASED) if open, false (BTN_PRESSED) if switch is shorted to GND ---
 #define BTN_PRESSED   LOW
 #define BTN_RELEASED  HIGH
 

@@ -12,7 +12,7 @@ WebSocketsServer webSocket(81);
 
 extern SemaphoreHandle_t applause_mutex;
 extern Applause dataApplause;
-extern Applause stored_counters[DISPLAY_VERY_LAST_COUNTER];  // NEU: extern Deklaration
+extern Applause stored_counters[DISPLAY_VERY_LAST_COUNTER];
 
 struct web_events_t system_status;
 struct web_settings_t system_settings;

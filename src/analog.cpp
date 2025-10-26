@@ -280,7 +280,6 @@ void applause_algorithm() {
   dataApplause.finalPeak   = dataApplause.dataDirect.rmsMax;
 }
 
-
 /*********************************************************************************************
 * @brief  Debugging life test
 *
