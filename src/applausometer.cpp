@@ -65,15 +65,15 @@ void setup_applausometer() {
   // Initialize small display
   // =================================
   setup_display();
-  display_print_image();
+  display_print_image(false);
 
 
   // =================================
   // Initialize LED strip
   // =================================
   strip.begin();
-  strip.show();                   // clear all LED
-  strip.setBrightness(128);        // 0..255
+  strip.show();                     // clear all LED
+  strip.setBrightness(128);         // 0..255
 
   
   // =================================
@@ -154,6 +154,10 @@ void loop_applausometer() {
   }
 
   if (dataApplause.timebased_measured > dataApplause.timebased_measured_max) {
+    if (measurement_active) {
+      updateList(&dataApplause, false, true);
+      Serial.printf("Measurement completed!\n");
+    }
     measurement_active = false;
     dataApplause.timebased_measured = dataApplause.timebased_measured_max;
   }  
@@ -193,7 +197,7 @@ void loop_applausometer() {
       {
         Serial.printf("Reset by button!\n");
 
-        updateList(&dataApplause, true);
+        updateList(&dataApplause, true, false);
 
         dataApplause.timebased_measured = 0;
         measurement_active = true;
@@ -214,7 +218,7 @@ void loop_applausometer() {
       break;
 
     default:
-      updateList(&dataApplause, false);
+      updateList(&dataApplause, false, false);
       break;
   }
   vTaskDelay(1);
@@ -237,14 +241,14 @@ void loop_applausometer() {
 
     switch (buttonmode) {
       case DISPLAY_LOGO:                // Start splash
-        display_print_image(); 
+        display_print_image(false); 
       break;
 
       case DISPLAY_EXTENDED_INFO:       // Show history and system info
         if (page < DISPLAY_SYSTEM)
           display_print_counter(stored_counters, page, DISPLAY_VERY_LAST_COUNTER, progress_vert);
         else
-          display_print_image();
+          display_print_image(true);
           //display_print_system();
       break;
 
@@ -263,19 +267,18 @@ void loop_applausometer() {
   // =================================
   // Web control
   // =================================  
-
   // Check if new participant name arrived from web
   if (system_status.name_updated) {
-    MutexNameEvent();  
+    mutexNameEvent();  
     Serial.printf("Name set by web: %s\n", dataApplause.name);
   }
 
   if (system_status.button_reset) {           // Reading of the value without semaphore
           Serial.printf("Reset by web!\n");
 
-          updateList(&dataApplause, true);    // See display button management, which controls updateList(..., false) also for normal updates 
+          //updateList(&dataApplause, true, false);    // See display button management, which controls updateList(..., false) also for normal updates 
 
-          MutexButtonEvent(false);            // To write the value we will use a semaphore
+          mutexButtonEvent(false);            // To write the value we will use a semaphore
 
           dataApplause.timebased_measured = 0;
           measurement_active = true;

@@ -9,7 +9,6 @@
 #include "httpd.h"
 #include "websocketd.h"
 #include "ota.h"
-#include "status.h"
 
 
 // =================================
@@ -96,7 +95,7 @@ void setup()
   // =   Initialize Applausometer
   // ================================= 
   
-  setup_config(&system_status, &system_settings);
+  setup_webevents(&system_status, &system_settings);
   
   setup_applausometer();
 
@@ -119,8 +118,10 @@ void setup()
   // =   Search Wifi and activate AP
   // =================================  
   WiFi.mode(WIFI_AP_STA);
-
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD); // Credentials for infrasstructure mode
+  char ssid[100] = WIFI_SSID;
+  char pw[100] = WIFI_PASSWORD;
+  loadWifi(ssid, pw, sizeof(ssid), sizeof(pw));   // Insecure feature! Do you really want to read a plain file with a password?
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);           // Credentials for infrasstructure mode
 
   unsigned long startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 3000) {

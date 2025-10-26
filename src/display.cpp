@@ -1,14 +1,17 @@
 #include "display.h"
-//#include "filesystem.h"
-
+#include <WiFi.h>
 
 
 // Display object
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 
+/*********************************************************************************************
+* @brief  setup_display
+*         Initialize small display for main information
+**********************************************************************************************/
 void setup_display() {
-  // Start I²C 
+  // Start I2C 
   Wire.begin(OLED_SDA, OLED_SCL, 50000);
 
   // Initialize display  
@@ -30,9 +33,9 @@ void setup_display() {
 *
 * @param  main_value Large displayed value (typically final counter of the algorithm) (0.0 ... 1.0)
 * @param  value_vol Small displayed value for current volume (0.0 ... 1.0)
-* @param  value_peak SmLL displayed value for peak (0.0 ... 1.0)
+* @param  value_peak Small displayed value for peak (0.0 ... 1.0)
 * @param  progress_hori progress bar at the bottom line (e.g. for measurement duration)
-* @param  progress_vert progress bar at the bottom line  
+* @param  progress_vert progress bar at the right side (e.g. to show button pressed time)  
 *
 **********************************************************************************************/
 void display_print_value(float main_value, float value_vol, float value_peak, float progress_hori, float progress_vert) {
@@ -65,7 +68,15 @@ void display_print_value(float main_value, float value_vol, float value_peak, fl
 	display.display();
 }
 
-
+/*********************************************************************************************
+* @brief  Show main data on a small display
+*
+* @param  pdata Record array of stored data
+* @param  index Array indexed record
+* @param  elements Max. records of array of Applause
+* @param  progress_vert progress bar at the right side (e.g. to show button pressed time)  
+*
+**********************************************************************************************/
 void display_print_counter(Applause *pdata, size_t index, size_t elements, float progress_vert) {
 	char buf[100];
 
@@ -78,16 +89,15 @@ void display_print_counter(Applause *pdata, size_t index, size_t elements, float
     display.setTextSize(1);
     display.setCursor(0, 0);
 
-	sprintf(buf, "ID: %lu   Peak: %4.0f", index, pdata[index].dataDirect.rmsMax*100);
+	sprintf(buf, "ID: %lu   Peak: %4.0f", index, pdata[index].finalPeak);
 	display.print(buf);
 
     // Main large value in the middle of the display
     display.setTextSize(3);		// Size 3 should cover the complete value, readable
     display.setCursor(0, 30);   // Position at pixel y~30 (coordinates start at upper left corner with x,y = 0,0 
 
-	sprintf(buf, "%4.1f", pdata[index].dataDirect.dataCount);
+	sprintf(buf, "%4.1f", pdata[index].finalResult);
 	display.print(buf);
-    //display.print(pdata[index].dataDirect.dataCount, 0);   // No comma ?!
 
 	// Set a progress bar at the right size with 2 lines (0.0 bis 1.0)
     // Set the length of the bar in pixel  (display with a length of e.g. 64 pixel)
@@ -100,14 +110,9 @@ void display_print_counter(Applause *pdata, size_t index, size_t elements, float
 }
 
 
-
-
 //See https://javl.github.io/image2cpp/
 
-
-
-// 'ClapHands64', 128x64px
-// 'ClapHands64a', 128x64px
+//Logo
 const unsigned char epd_bitmap_ClapHands128x64 [] PROGMEM = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -249,11 +254,24 @@ const unsigned char* epd_bitmap_allArray[2] = {
 	epd_bitmap_FabLab128x64
 };
 
-void display_print_image() {
+/*********************************************************************************************
+* @brief  Show an image on a small display
+*
+* @param  withIP Show the DHCP IP address of a connected WiFi
+*
+**********************************************************************************************/
+void display_print_image(bool withIP) {
   display.clearDisplay();
 
-  // Show bitmap
+	// Show bitmap
   display.drawBitmap(0, 0, epd_bitmap_ClapHands128x64, SCREEN_WIDTH, SCREEN_HEIGHT, WHITE);
+
+  if (withIP) {
+    // Header upper left corner
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+	display.print(WiFi.localIP());
+  }
+
   display.display();
 }
-

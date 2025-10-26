@@ -3,7 +3,6 @@
 #include <Arduino.h>
 
 #include "websocketd.h"
-#include "status.h"
 #include "analog.h"
 #include "applausometer.h"
 #include "filesystem.h"
@@ -25,7 +24,11 @@ static unsigned long lastListPush = 0;
 Applause dataApplauseCopy;
 
 
-void setup_config(web_events_t *events, web_settings_t *settings)
+/*********************************************************************************************
+* @brief  setup_config
+*         Initialize web socket
+**********************************************************************************************/
+void setup_webevents(web_events_t *events, web_settings_t *settings)
 {
     events->update = false;
     events->button_reset = false;
@@ -40,7 +43,7 @@ void setup_config(web_events_t *events, web_settings_t *settings)
         settings->gain_db = 60;
         settings->duration = 90; //Seconds
     }
-    MutexUpdateSettings(&system_settings);
+    mutexUpdateSettings(&system_settings);
     Serial.printf("Used config: band=%dHz, gain=%ddB, duration=%lus\n", settings->frq, settings->gain_db, settings->duration);
 }
 
@@ -55,6 +58,16 @@ static String uptimeString() {
     return String(buf);
 }
 
+/*********************************************************************************************
+* @brief  Show main data on a small display
+*
+* @param  main_value Large displayed value (typically final counter of the algorithm) (0.0 ... 1.0)
+* @param  value_vol Small displayed value for current volume (0.0 ... 1.0)
+* @param  value_peak Small displayed value for peak (0.0 ... 1.0)
+* @param  progress_hori progress bar at the bottom line (e.g. for measurement duration)
+* @param  progress_vert progress bar at the right side (e.g. to show button pressed time)  
+*
+**********************************************************************************************/
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
     switch (type) {
         case WStype_DISCONNECTED:
@@ -79,9 +92,10 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 
             if (!strcmp(cmd, "reset_peaks"))                //Start new applause measuring
             {
-                MutexButtonEvent(true);
+                mutexButtonEvent(true);
                 ws_update_livedata();
-                updateList(&dataApplause, true);                
+                updateList(&dataApplause, true, false);
+                Serial.printf("Reset by ws!\n");                
                 ws_update_storedrecords();
             }
             else if (!strcmp(cmd, "set_config"))           //Configuration is set
@@ -94,7 +108,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                 }
                 Serial.printf("Settings update: freq=%dHz, gain=%ddB, duration=%lus\n",
                               system_settings.frq, system_settings.gain_db, system_settings.duration);
-                MutexUpdateSettings(&system_settings);
+                mutexUpdateSettings(&system_settings);
                 ws_update_config();
             }
             else if (!strcmp(cmd, "set_name"))          // Receive participant name from browser
@@ -187,7 +201,7 @@ void loop_websocketd() {
     unsigned long now = millis();
     if (now - lastPush >= websocket_update_interval) {
         lastPush = now;
-        MutexCopySoundData(&dataApplauseCopy); // Lets use a copy to minimize mutex operations
+        mutexCopySoundData(&dataApplauseCopy); // Lets use a copy to minimize mutex operations
         ws_update_livedata();
     }
     if (now - lastListPush >= websocket_update_interval*10-7) {

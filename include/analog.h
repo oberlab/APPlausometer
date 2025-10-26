@@ -3,12 +3,12 @@
 #include <Arduino.h>
 #include "driver/i2s.h"
 #include "driver/adc.h"
-#include "status.h"
+#include "websocketd.h"
 
 
 // ===== Choose one of the following algorithm =====
 // #define ALGORITHM_FULL_SUM 1
-#define ALGORITHM_AVERAGE 1
+#define ALGORITHM_DIRECT_ONLY 1
 // #define ALGORITHM_HIGHEST 1
 
 
@@ -112,12 +112,12 @@ size_t read_block(int16_t* dest, size_t maxSamples);
 bool block_rms(float& rmsBand, float& rmsDirect);
 
 // Make a copy of the data for other cpu tasks
-void MutexCopySoundData(Applause *copyApplause);
-void MutexNameEvent(void);
-void MutexButtonEvent(bool state);
-void MutexUpdateSettings(web_settings_t *settings);
+void mutexCopySoundData(Applause *copyApplause);
+void mutexNameEvent(void);
+void mutexButtonEvent(bool state);
+void mutexUpdateSettings(web_settings_t *settings);
 
 // Application Applause algorithm
 void applause_algorithm();
 
-int DebuggerUpdateSettings();
+int debuggerUpdateSettings();

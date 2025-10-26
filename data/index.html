@@ -66,6 +66,8 @@
     th, td { padding: 8px 10px; border-bottom: 1px solid var(--muted); font-size: 13px; }
     th { color: var(--sub); text-align: left; font-weight: 600; }
     tbody tr:hover { background: #1a2230; }
+    tbody tr.current { background: rgba(22, 199, 132, 0.1); }
+    tbody tr.current td { color: var(--ok); font-weight: 700; }
 
     @media (max-width: 820px) {
       .grid { grid-template-columns: 1fr; }
@@ -123,7 +125,6 @@
 
           // Update stored records from ESP32
           if (lastMessage.records !== undefined) {
-            console.log('Received records from ESP32:', lastMessage.records);
             storedRecords = lastMessage.records;
             renderList();
           }
@@ -239,7 +240,7 @@
     function renderList() {
       const tbody = document.getElementById('listBody');
       tbody.innerHTML = storedRecords.map((r, idx) => `
-        <tr>
+        <tr${idx === 0 ? ' class="current"' : ''}>
           <td>${idx+1}</td>
           <td>${escapeHtml(r.name || '---')}</td>
           <td style="text-align:right">${(r.finalPeak || 0).toFixed(1)}</td>
@@ -379,7 +380,7 @@
 
             <!-- Set Participant Name -->
             <div style="margin-top:14px;">
-              <h3>Teilnehmer Name setzen</h3>
+              <h3>Teilnehmer Name setzen (aktuelle Messung)</h3>
               <div style="display:flex; gap:8px;">
                 <input id="participantNameInput" type="text" placeholder="Name eingeben" style="flex:1;" />
                 <button class="btn primary" id="setNameBtn" onclick="setParticipantName()">Name setzen</button>

@@ -206,14 +206,19 @@ void read_file(Applause *pdata, size_t elements) {
 * 
 * @param  data  Latest applause measurement data
 * @param  shift If true, a record will be shifted in the list and stored 
+* @param  store If true, a record will stored but not shifted 
 *
 * @result void
 *
-* @remarks The local stored FIFO buffer will be updated, too. This data are used for display
+* @remarks If bot are true, store and shift, the shift operation wins and the data will be 
+*          stored in any case.
+*          The local stored FIFO buffer will be updated, too. This data are used for display
 *          and web page.
 **********************************************************************************************/
-void updateList(Applause *data, bool shift) {
+void updateList(Applause *data, bool shift, bool store) {
   
+  static bool lastStoreAction = false;
+
   // Shift all recorded older counters and write the latest
   if (shift) {
     memmove(stored_counters+1, stored_counters, (DISPLAY_VERY_LAST_COUNTER - 1) * sizeof(Applause));
@@ -222,7 +227,7 @@ void updateList(Applause *data, bool shift) {
   memmove(&stored_counters[DISPLAY_COUNTER], data, sizeof(Applause));
 
   //Only store if shifted a new record
-  if (shift) {
+  if (store || (lastStoreAction == false && shift)) {
     write_file(data, 1);
 
     //Test print
@@ -235,9 +240,16 @@ void updateList(Applause *data, bool shift) {
                     pStored->finalResult);
       pStored++;
     }
+  }
+  //State machine to detect an already stored record
+  if (shift) {
+    lastStoreAction = false;
     data->id++;
     reset_sound_data(&data->dataDirect);
-    reset_sound_data(&data->dataBand);
+    reset_sound_data(&data->dataBand);  
+  }
+  if (store) {
+      lastStoreAction = true;
   }
 }
 
@@ -301,6 +313,59 @@ bool loadSettings(web_settings_t *settings) {
   
   if (doc.containsKey("duration")) {
     settings->duration = doc["duration"].as<unsigned long>();
+  }
+  else {config_missing++;}
+
+  return (config_missing == 0);
+
+}
+
+/*********************************************************************************************
+* @brief  loadWifi reads the user/password, if exist from the SPIFFS
+*         If no valid file could be found, the settings are unchanged  
+* @param  ssid  Target string for ssid
+* @param  pw    Target string for password
+*
+* @result true, if settings are updated, false in case of error or not found
+*
+* @remarks Please note, this function is a pane!!! and insecure!!!
+*          Best is to use the AP instead with the fix IP and the secure password from the device
+*
+**********************************************************************************************/
+bool loadWifi(char *ssid, char *pw, size_t size_ssid, size_t size_pw) {
+  int config_missing = 0;
+
+  File file = FILESYSTEM.open("/wifi.json", FILE_READ);
+  if (!file) {
+    Serial.println("Error opening wifi parameter!");
+    return false;
+  }
+
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
+  if (error) {
+    Serial.print("Error parsing settings: ");
+    Serial.println(error.c_str());
+    return false;
+  }
+
+  if (doc.containsKey("pw")) {
+      const char* name = doc["ssid"] | "";
+    if (strlen(name) > 0) {
+      strncpy(ssid, name, size_ssid - 1);
+      ssid[size_ssid - 1] = '\0';
+    }
+  }
+  else {config_missing++;}
+
+  if (doc.containsKey("pw")) {
+    const char* name = doc["pw"] | "";
+    if (strlen(name) > 0) {
+      strncpy(pw, name, size_pw - 1);
+      pw[size_pw - 1] = '\0';
+    }
   }
   else {config_missing++;}
 

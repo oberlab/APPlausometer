@@ -17,5 +17,5 @@
 
 void setup_display();
 void display_print_value(float main_value, float value_vol, float value_peak, float progress_hori, float progress_vert);
-void display_print_image();
+void display_print_image(bool withIP);
 void display_print_counter(Applause *pdata, size_t index, size_t elements, float progress_vert);

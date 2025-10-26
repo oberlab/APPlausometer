@@ -1,5 +1,4 @@
 #include "analog.h"
-#include "status.h"
 
 
 extern SemaphoreHandle_t applause_mutex;
@@ -9,16 +8,14 @@ extern web_settings_t system_settings;
 // =================================
 // =     Define band pass
 // =================================
-// Band pass data: "Clap" (~1–3 kHz)
 const float         SOUND_BANDPASS_QUALITY  = 1.0f;
 const float         THRESHOLD_SOUND = 0.015f;
 const unsigned long DEBOUNCE_SOUND_MS = 180;
 
 
 Applause dataApplause;
-
-
 Biquad soundBandPass;
+
 
 /*********************************************************************************************
 * @brief  setup_analog
@@ -32,14 +29,6 @@ void setup_analog(){
   dataApplause.id = 0;
   reset_sound_data(&dataApplause.dataDirect);
   reset_sound_data(&dataApplause.dataBand);
-
-// Set in an very eary state somewhere else!
-/*
-  setup_max9814_gain(GAIN_50DB);
-  dataApplause.timebased_measured = 0;
-  dataApplause.timebased_measured_max = 120; // Example 2: Update every 0,5s 120 for 2 minutes
-  Serial.printf("Band pass: fc=%.1f Hz, Q=%.2f, Quality=%.3f\n", SOUND_BANDPASS_FRQ , SOUND_BANDPASS_QUALITY , THRESHOLD_SOUND );
-*/
 }
 
 /*********************************************************************************************
@@ -78,13 +67,13 @@ void setup_max9814_gain(max9814_gain_t gain) {
 }
 
 /*********************************************************************************************
-* @brief  MutexCopySoundData
+* @brief  mutexCopySoundData
 *         Used for multithreading operations to the same data  
 *
 * @param  copyApplause We will copy the original to this structure
 *
 **********************************************************************************************/
-void MutexCopySoundData(Applause *copyApplause) {
+void mutexCopySoundData(Applause *copyApplause) {
   if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
       // Critical data exchange  
       memcpy(copyApplause, &dataApplause, sizeof(Applause));
@@ -93,13 +82,13 @@ void MutexCopySoundData(Applause *copyApplause) {
 }
 
 /*********************************************************************************************
-* @brief  MutexCopySettings
+* @brief  mutexCopySettings
 *         Used for multithreading operations to the same data  
 *
 * @param  settings We will directly modify the values
 *
 **********************************************************************************************/
-void MutexUpdateSettings(web_settings_t *settings) {
+void mutexUpdateSettings(web_settings_t *settings) {
   if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     // Critical data exchange  
     soundBandPass.setBandpass((float)SAMPLE_RATE, settings->frq, SOUND_BANDPASS_QUALITY );
@@ -118,17 +107,16 @@ void MutexUpdateSettings(web_settings_t *settings) {
     }
     xSemaphoreGive(applause_mutex); 
   }
-  //Serial.printf("Band pass settings http update: freq=%d Hz, gain=%d, duration=%lus\n", settings->frq, settings->gain_db, settings->duration);
 }
 
 /*********************************************************************************************
-* @brief  MutexButtonEvent
+* @brief  mutexButtonEvent
 *         Used for multithreading operations to the same data  
 *
 * @param  state We will directly modify the state
 *
 **********************************************************************************************/
-void MutexButtonEvent(bool state) {
+void mutexButtonEvent(bool state) {
   if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
       // Critical data exchange
         system_status.button_reset = state;
@@ -141,7 +129,7 @@ void MutexButtonEvent(bool state) {
 *         Used for multithreading operations to the same data  
 *
 **********************************************************************************************/
-void MutexNameEvent(void) {
+void mutexNameEvent(void) {
   if (xSemaphoreTake(applause_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
     // Copy name to current applause data
     strncpy(dataApplause.name, system_status.participant_name, APPLAUSE_NAME_SIZE - 1);
@@ -197,7 +185,6 @@ void reset_sound_data(struct SoundData *data) {
 void setup_i2s_adc(){
   // Configure ADC (Width & damping -> 0..3.3V )
   adc1_config_width(ADC_WIDTH_BIT_12);
-  //adc1_config_channel_atten(ADC1_CHANNEL_6, ADC_ATTEN_DB_11db); // ~0..3.6V
   analogSetPinAttenuation(ADC_CHANNEL_MC, ADC_11db);
 
   // =================================
@@ -251,16 +238,16 @@ bool block_rms(float& rmsBand, float& rmsDirect) {
 
     for (size_t i = 0; i < n; ++i) {
         uint16_t s12 = (uint16_t)raw[i] & 0x0FFF;          // 12-Bit
-        float x = ((int)s12 - 2048) / 2048.0f;             // DC-Offset abziehen
+        float x = ((int)s12 - 2048) / 2048.0f;             // sub DC offset
 
-        float band = soundBandPass.process(x);             // tiefer Bandpass für Stomp
+        float band = soundBandPass.process(x);             // Bandpass for optional sound range
         sumSqBand  += (double)band * band;
 
-        sumSqTotal  += (double)x * x;                      // Gesamt-RMS
+        sumSqTotal  += (double)x * x;                      // Sum of MS
     }
 
     rmsBand = sqrtf((float)(sumSqBand / (double)n));
-    rmsDirect  = sqrtf((float)(sumSqTotal / (double)n));   // Breitband-Lautstärke
+    rmsDirect  = sqrtf((float)(sumSqTotal / (double)n));   // Direct volume
     return true;
 }
 
@@ -271,15 +258,15 @@ bool block_rms(float& rmsBand, float& rmsDirect) {
 *
 **********************************************************************************************/
 void applause_algorithm() {
-  dataApplause.finalResult = dataApplause.dataDirect.rmsTotal; // + dataApplause.dataBand.rmsTotal;
+  dataApplause.finalResult = dataApplause.dataDirect.rmsTotal;
 
   // Different ideas for the calculation:
 #ifdef ALGORITHM_FULL_SUM 
   dataApplause.finalVolume = dataApplause.dataBand.rmsNow + dataApplause.dataDirect.rmsNow;
 #endif
 
-#ifdef ALGORITHM_AVERAGE 
-  dataApplause.finalVolume = dataApplause.dataDirect.rmsNow; //(dataApplause.dataBand.rmsNow + dataApplause.dataDirect.rmsNow) / 2;
+#ifdef ALGORITHM_DIRECT_ONLY 
+  dataApplause.finalVolume = dataApplause.dataDirect.rmsNow;
 #endif
 
 #ifdef ALGORITHM_HIGHEST 
@@ -290,12 +277,15 @@ void applause_algorithm() {
   }
 #endif
 
-  dataApplause.finalPeak   = dataApplause.dataDirect.rmsMax; // + dataApplause.dataBand.rmsMax;
+  dataApplause.finalPeak   = dataApplause.dataDirect.rmsMax;
 }
 
 
-//Debugging test life
-int DebuggerUpdateSettings() {
+/*********************************************************************************************
+* @brief  Debugging life test
+*
+**********************************************************************************************/
+int debuggerUpdateSettings() {
   static int test = 0;
 
   test++;
