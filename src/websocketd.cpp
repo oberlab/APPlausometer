@@ -90,7 +90,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
             const char* cmd = doc["command"] | "";
             if (!*cmd) return;
 
-            if (!strcmp(cmd, "reset_peaks"))                //Start new applause measuring
+            if (!strcmp(cmd, "reset_peaks"))                // Start new applause measuring
             {
                 mutexButtonEvent(true);
                 ws_update_livedata();
@@ -98,7 +98,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                 Serial.printf("Reset by ws!\n");                
                 ws_update_storedrecords();
             }
-            else if (!strcmp(cmd, "set_config"))           //Configuration is set
+            else if (!strcmp(cmd, "set_config"))           // Configuration is set
             {
                 JsonVariant cfg = doc["config"];
                 if (cfg.is<JsonObject>()) {
@@ -111,7 +111,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                 mutexUpdateSettings(&system_settings);
                 ws_update_config();
             }
-            else if (!strcmp(cmd, "set_name"))          // Receive participant name from browser
+            else if (!strcmp(cmd, "set_name"))              // Receive participant name from browser
             {
                 const char* name = doc["name"] | "";
                 if (strlen(name) > 0) {
@@ -126,9 +126,28 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
                 ws_update_livedata();
                 ws_update_storedrecords();
             }
+            else if (!strcmp(cmd, "delete_counter_csv"))    // Delete counter.csv file
+            {
+                if (FILESYSTEM.exists("/counter.csv")) {
+                    if (FILESYSTEM.remove("/counter.csv")) {
+                        Serial.println("counter.csv deleted successfully");
+                        
+                        // Clear stored_counters array
+                        for (size_t i = 0; i < DISPLAY_VERY_LAST_COUNTER; i++) {
+                            memset(&stored_counters[i], 0, sizeof(Applause));
+                        }
+                        
+                        ws_update_storedrecords();  // Send empty list to browser
+                    } else {
+                        Serial.println("Failed to delete counter.csv");
+                    }
+                } else {
+                    Serial.println("counter.csv does not exist");
+                }
+            }
             else
             {
-                // unknown commands are ignored for the demo
+                // unknown commands are ignored...
             }
         } break;
 

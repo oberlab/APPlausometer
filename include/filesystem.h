@@ -4,6 +4,8 @@
 #include "fs_compat.h"
 #include "analog.h"
 
+#define SECRET_FILE "/wifi.json"
+
 
 int  write_file(Applause *pdata, size_t elements);
 void read_file(Applause *pdata, size_t elements);

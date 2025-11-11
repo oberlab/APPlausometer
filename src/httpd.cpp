@@ -104,6 +104,16 @@ void setup_httpd()
     }
 
     String path = "/" + httpd.arg("file");  // z.B. ?file=config.json
+
+    // --- Blacklist check for the file with wifi passwords ---
+    if (path.endsWith("/")) {
+      path.remove(path.length() - 1);
+    }
+    if (path.indexOf(SECRET_FILE) != -1) {
+      httpd.send(403, "text/plain", "Access denied for this file");
+      return;
+    }
+
     if (!exists(path)) {
       httpd.send(404, "text/plain", "File not found");
       return;

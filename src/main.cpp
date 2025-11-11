@@ -121,7 +121,7 @@ void setup()
   char ssid[100] = WIFI_SSID;
   char pw[100] = WIFI_PASSWORD;
   loadWifi(ssid, pw, sizeof(ssid), sizeof(pw));   // Insecure feature! Do you really want to read a plain file with a password?
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);           // Credentials for infrasstructure mode
+  WiFi.begin(ssid, pw);                           // Credentials for infrasstructure mode
 
   unsigned long startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 3000) {

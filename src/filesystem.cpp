@@ -317,7 +317,6 @@ bool loadSettings(web_settings_t *settings) {
   else {config_missing++;}
 
   return (config_missing == 0);
-
 }
 
 /*********************************************************************************************
@@ -335,7 +334,7 @@ bool loadSettings(web_settings_t *settings) {
 bool loadWifi(char *ssid, char *pw, size_t size_ssid, size_t size_pw) {
   int config_missing = 0;
 
-  File file = FILESYSTEM.open("/wifi.json", FILE_READ);
+  File file = FILESYSTEM.open(SECRET_FILE, FILE_READ);
   if (!file) {
     Serial.println("Error opening wifi parameter!");
     return false;
@@ -351,7 +350,7 @@ bool loadWifi(char *ssid, char *pw, size_t size_ssid, size_t size_pw) {
     return false;
   }
 
-  if (doc.containsKey("pw")) {
+  if (doc.containsKey("ssid")) {
       const char* name = doc["ssid"] | "";
     if (strlen(name) > 0) {
       strncpy(ssid, name, size_ssid - 1);
@@ -370,7 +369,6 @@ bool loadWifi(char *ssid, char *pw, size_t size_ssid, size_t size_pw) {
   else {config_missing++;}
 
   return (config_missing == 0);
-
 }
 
 /*********************************************************************************************

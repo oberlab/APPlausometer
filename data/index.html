@@ -55,7 +55,7 @@
     .row label { color: var(--sub); font-size: 13px; }
     input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 10px 12px; background: #0f141d; color: var(--ink); border: 1px solid var(--muted); border-radius: 8px; }
     textarea { min-height: 100px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
-    .btn { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--muted); background: #1e2633; color: var(--ink); cursor: pointer; }
+    .btn { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--muted); background: #1e2633; color: var(--ink); cursor: pointer; display: block; margin: 6px 0; }
     .btn.primary { background: linear-gradient(90deg, var(--brand), var(--accent)); border: none; }
     .btn.danger { background: #2a1314; border: 1px solid #4a1c1e; color: #ff9ea3; }
     .btn.ghost { background: transparent; }
@@ -296,6 +296,20 @@
     // --- Utilities ---
     // no other commands needed in demo
 
+    // --- File Delete ---
+    function deleteCounterCSV() {
+      if (!confirm('Wirklich alle gespeicherten Applausmessungen (counter.csv) löschen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden!')) {
+        return;
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: 'delete_counter_csv' }));
+        alert('Löschbefehl gesendet. Die Datei counter.csv wird gelöscht.');
+      } else {
+        alert('WebSocket nicht verbunden!');
+      }
+    }
+
     // --- File Download ---
     function downloadFile(filename) {
       // The ESP32 supports in the webserver the file /download?file=...
@@ -436,11 +450,11 @@
 
           <div class="card" style="grid-column: span 6;">
             <h3>Dateiaktionen</h3>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn" onclick="resetPeaks(true)">Peaks lokal löschen</button>
-              <button class="btn" onclick="downloadFile('config.json')">config.json herunterladen</button>
+            <div style="display:flex; flex-direction:column; gap:8px;">
               <button class="btn" onclick="downloadFile('counter.csv')">counter.csv herunterladen</button>
-              <button class="btn" onclick="downloadFile('debugging.csv')">debugging.csv herunterladen</button>
+              <button class="btn" onclick="downloadFile('config.json')">config.json herunterladen</button>              
+              <button class="btn danger" onclick="deleteCounterCSV()">Gespeicherte Applausmessungen löschen</button>
+              <!--<button class="btn" onclick="downloadFile('debugging.csv')">debugging.csv herunterladen</button> -->
             </div>
             <div style="margin-top:14px;">
               <h3>Debug Info</h3>
