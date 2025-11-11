@@ -3,7 +3,7 @@
  * 
  * @author https://oberlab.de 
  * 
- * @version 0.9.0.1
+ * @version 0.9.1.0
  * 
  * @remarks Used hardware platform: ESP32 DEV KIT C V4
  * 
@@ -18,7 +18,7 @@
 
 #include "applausometer.h"
 
-
+//#define LEDTEST 1     //Test the LED stip
 
 static int display_mode = DISPLAY_LOGO;
 
@@ -166,9 +166,19 @@ void loop_applausometer() {
   // =================================
   // LED strip monitoring
   // =================================
-  if (now - tMonitorLED > 50) {
+  if (now - tMonitorLED > 100) {
     tMonitorLED = now;
-    showStripLED((dataApplause.finalVolume), resetStripLED);
+    #ifdef LEDTEST
+      static float testVolume = 0.0;
+      testVolume += 0.01;
+      if (testVolume >=1.0) {
+        testVolume = 0;      
+      }
+      showStripLED((testVolume), resetStripLED);
+    #else
+      // float logScaled = powf(dataApplause.finalVolume, 0.3f); Logarithmic data???
+      showStripLED((dataApplause.finalVolume), resetStripLED);
+    #endif
     resetStripLED = false;
     vTaskDelay(1);
   }
