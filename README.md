@@ -1,8 +1,6 @@
-![APPlausumeter](/public/clap.png)
+![APPlausometer](/public/clap.png)
 
-** APPlausometer **
-
-> [https://wiki.oberlab.de](https://wiki.oberlab.de/books/verschiedene-projekte/page/applausometer)
+[https://wiki.oberlab.de](https://wiki.oberlab.de/books/verschiedene-projekte/page/applausometer)
 
 # APPlausometer
 
