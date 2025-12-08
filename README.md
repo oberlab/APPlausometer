@@ -1,7 +1,17 @@
-# ESP und websocket demo
+![APPlausumeter](/public/clap.png)
 
-Ein Lernprojekt zum Einsatz von **ESP32**, **WebSockets** und **PlatformIO**. Ziel ist es, eine bidirektionale Kommunikation zwischen einem ESP32 und einem Webbrowser zu ermöglichen – ideal für Sensorik, Debugging, Steuerung oder einfache Dashboards.
+** APPlausometer **
 
+> [https://wiki.oberlab.de](https://wiki.oberlab.de/books/verschiedene-projekte/page/applausometer)
+
+# APPlausometer
+
+Das Gemeinschaftsprojekt wurde realisiert, um beispielsweise für einen Poetry Slam eine Applausmessung zu ermöglichen.
+
+Zum Einsatz kamen verschiedenste Techniken, wie Softwareentwicklung, Designentwicklung, mechanische Herausforderungen, Usability... 
+
+
+Das Softwarepaket diente auch als Lernprojekt zum Einsatz von **ESP32**, **WebSockets** und **PlatformIO**. In der Software war das Ziel, eine bidirektionale Kommunikation zwischen einem ESP32 und einem Webbrowser zu ermöglichen – ideal für Sensorik, Debugging, Steuerung oder einfache Dashboards.
 
 ## Begriffe
 - **webserver** (httpd) Bietet Dateien über http an
@@ -59,7 +69,7 @@ Die IP des ESP muss in `platformio.ini` gesetzt werden. Alternativ kann auch der
 
 ## Arduino Nano ESP32
 
-Dieses Projekt ist nun auch für das Board „Arduino Nano ESP32“ vorbereitet. Wähle dazu die Umgebung `arduino-nano-esp32` in PlatformIO aus.
+Dieses Projekt ist auch für das Board „Arduino Nano ESP32“ vorbereitet. Wähle dazu die Umgebung `arduino-nano-esp32` in PlatformIO aus.
 
 - Firmware flashen (USB):
   - `pio run -t upload -e arduino-nano-esp32`
@@ -70,3 +80,5 @@ Dieses Projekt ist nun auch für das Board „Arduino Nano ESP32“ vorbereitet.
   - `pio run -t uploadfs -e arduino-nano-esp32-ota`
 
 Hinweis: Das Projekt verwendet SPIFFS. Die `data/`-Dateien werden 1:1 in das Dateisystem des ESP übernommen. 
+
+Weitere Details werden gerne zur Verfügung gestellt: Kontakt 
